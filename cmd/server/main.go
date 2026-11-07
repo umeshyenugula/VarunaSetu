@@ -55,19 +55,12 @@ func main() {
 		logger.Error("verifier init failed", "error", err)
 		os.Exit(1)
 	}
-	// Dev/demo identity: in-memory registry. Production should use durable enrollment + key management.
-	reg := identity.NewRegistry()
-	idv, err := identity.NewVerifier(identity.DefaultConfig(), reg, reg)
-	if err != nil {
-		logger.Error("identity init failed", "error", err)
-		os.Exit(1)
-	}
 	repo := &service.Repository{DB: db}
 	srv, err := service.New(service.Config{
 		Verifier:        v,
-		Identity:        idv,
-		KeyStore:        reg,
-		Revoked:         reg,
+		KeyStore:        repo,
+		Revoked:         repo,
+		IdentityConfig:  identity.DefaultConfig(),
 		Repository:      repo,
 		Logger:          logger,
 		CORSAllowOrigin: os.Getenv("CORS_ALLOW_ORIGIN"),

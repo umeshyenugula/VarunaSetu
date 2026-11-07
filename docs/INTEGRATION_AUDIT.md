@@ -30,7 +30,7 @@ Scope: repository-wide baseline audit (Phases 0–5 present in tree). Evidence g
 | Durable Escrow | Implemented in service | Neighbor-cell durable corroboration not fully replicated (documented) | MEDIUM | Keep transactional invariants; document limitation |
 | Audit Ledger | Go package + migration 002 | Not connected to HTTP service/events | HIGH | Define integration interface; avoid competing truth; do not claim admin-rewrite prevention |
 | Water Allocation | Implemented (Phase 4, NetworkX) | Not exposed via service/dashboard live API | MEDIUM | Keep ACCEPT-only/integer constraints; add API/UI wiring only if stable |
-| React Dashboard | Implemented (Phase 5) | Uses SIMULATED fixtures for missing list/aggregate/ledger APIs; chunk size warning | HIGH | Wire to new backend read endpoints; keep simulated labels until live data verified |
+| React Dashboard | Implemented (Phase 5) | Uses live backend read endpoints; reports API failures explicitly; chunk size warning remains | LOW | Keep API contracts and error states covered by tests |
 | Docker | Not present | No Dockerfiles/Compose | HIGH | Add minimal compose for PostGIS + service (+ optional dashboard) with health checks |
 | Deployment/Env | Not present | No `.env.example` | HIGH | Add `.env.example`; never store secrets |
 
@@ -49,7 +49,7 @@ Scope: repository-wide baseline audit (Phases 0–5 present in tree). Evidence g
 
 1. **CRITICAL/HIGH integration**: add missing dashboard-facing read endpoints (list readings/escrows/cells summary, analytics, ledger entries) as thin handlers/repo queries; keep existing endpoints stable.
 2. **Docker/env**: add `docker-compose.yml` and `.env.example` with PostGIS + service build/run and correct health checks.
-3. **Frontend wiring**: point API client to real endpoints where added; retain SIMULATED fallback.
+3. **Frontend wiring**: keep the API client connected to real endpoints and do not add fabricated fallback data.
 4. **Service tests**: run with disposable PostGIS (Docker network or host DB URL) and fix regressions.
 5. **Docs**: update `README`, `docs/SETUP.md`, `docs/TESTING.md`, `docs/ERROR_LOG.md`, `docs/ARCHITECTURE.md` to match actual state.
 

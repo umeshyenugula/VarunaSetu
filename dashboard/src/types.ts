@@ -12,8 +12,6 @@ export interface TelemetryReading {
   peerCount: number;
   decision: DecisionState;
   reason: string;
-  simulated: boolean;
-  scenario?: string;
 }
 
 export interface EscrowRecord {
@@ -24,8 +22,6 @@ export interface EscrowRecord {
   createdAt: string;
   expiresAt: string;
   corroboratedAt?: string | null;
-  simulated: boolean;
-  scenario?: string;
 }
 
 export interface LedgerEntryView {
@@ -36,7 +32,6 @@ export interface LedgerEntryView {
   timestamp: string;
   checkpointSignatureStatus: 'valid' | 'invalid' | 'none' | 'unknown';
   checkpointSeq?: number;
-  simulated: boolean;
 }
 
 export interface AnalyticsSummary {
@@ -46,18 +41,10 @@ export interface AnalyticsSummary {
   quarantined: number;
   escrowResolutionRate: number | null;
   activeDevices: number;
-  simulatedDataPresent: boolean;
 }
 
 export interface CellState {
   h3Index: string;
   state: DecisionState;
   readings: number;
-  simulated: boolean;
-}
-
-export interface DemoScenario {
-  id: string;
-  title: string;
-  description: string;
 }

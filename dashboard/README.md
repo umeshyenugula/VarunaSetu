@@ -1,6 +1,6 @@
-# HydroLedger Dashboard (Phase 5)
+# HydroLedger Dashboard
 
-Minimal, professional white-background React dashboard for HydroLedger: H3 geospatial verification states, telemetry readings, escrow workflow, audit ledger viewer, analytics, and scripted demonstration scenarios.
+Minimal, professional white-background React dashboard for HydroLedger: H3 geospatial verification states, persisted telemetry readings, escrow workflow, audit ledger viewer, and backend analytics.
 
 ## Requirements
 
@@ -35,7 +35,7 @@ npm run preview   # optional: preview production build
 npm test
 ```
 
-Includes component tests, API fallback/integration behavior tests, map rendering tests (mocked Leaflet), escrow display tests, and ledger verification UI tests.
+Includes component tests, API success/error-state integration tests, map rendering tests (mocked Leaflet), escrow display tests, and ledger viewer tests.
 
 ## API integration
 
@@ -46,12 +46,10 @@ The dashboard attempts to use `VITE_API_BASE` when configured:
 VITE_API_BASE=http://localhost:8080 npm run dev
 ```
 
-Many list/aggregate/ledger endpoints required by the dashboard are not yet available in the Phase 3 service (see `HANDOFF.md` REQUESTED CHANGES). When endpoints are unavailable, the UI uses **clearly labeled SIMULATED mock fixtures** and never invents backend functionality.
+The dashboard does not fall back to fixtures or fabricate values. If the API is
+unavailable, it shows an explicit error and empty operational state.
 
-## Simulated data
-
-All demonstration fixtures are marked `simulated: true` and rendered with visible **SIMULATED** labels/banners. Do not treat fixture data as production telemetry.
-
-## Demonstration scenarios
-
-See [`../docs/demo.md`](../docs/demo.md) for the six scripted scenarios, including the known cross-cell collusion limitation.
+The backend currently exposes persisted readings, escrows, cell summaries,
+analytics, and a ledger projection. Cryptographic ledger verification requires
+an authoritative verification endpoint; the dashboard does not claim to verify
+hashes in the browser.

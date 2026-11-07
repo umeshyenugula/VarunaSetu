@@ -5,6 +5,45 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 8 — 2026-11-07 — Live-only dashboard and audit-chain completion
+
+### What was done
+
+- Removed dashboard fixture/demo fallback paths and deleted `docs/demo.md`.
+  The dashboard requests persisted backend data and displays an explicit
+  unavailable/error state instead of fabricating operational values.
+- Replaced the server's in-memory device identity registry with durable public
+  key and revocation lookup from the `device` table.
+- Added transactional audit-chain appends for telemetry ingestion, escrow
+  corroboration, and escrow expiry. `GET /ledger/entries` reads the persisted
+  chain projection.
+- Updated README, architecture, integration-audit, and dashboard documentation
+  so they no longer claim fixture fallback or pending ledger wiring.
+
+### Validation
+
+```text
+go test ./... -count=1                                      => PASS
+service integration tests with disposable PostGIS           => PASS
+cd dashboard && npm test -- --run                           => 5 PASS
+cd dashboard && npm run build                               => PASS (chunk-size warning only)
+python -m unittest discover -s sim/tests -t . -v           => 70 PASS
+Docker Python 3.14 + NetworkX allocation suite             => 3 PASS
+git diff --check                                            => PASS
+```
+
+### Remaining limitations
+
+- The dashboard ledger view is a persisted projection; authoritative
+  cryptographic verification still requires a server verification endpoint.
+- Device enrollment administration is not exposed as an HTTP workflow; keys
+  must be provisioned in the database.
+- Allocation remains a standalone ACCEPT-only Python module and is not exposed
+  through the service API.
+- The frontend bundle is above Vite's 500 kB warning threshold.
+
+---
+
 ## Entry 7 — 2026-11-07 — Repository integration audit & stabilization pass
 
 ### What was done
@@ -30,7 +69,7 @@ without removing working functionality.
 - **Runtime/ops**: added `cmd/server/main.go` (env config, pgx driver, health
   flag), `Dockerfile`, `docker-compose.yml` (PostGIS + API + optional UI
   profile), `.env.example`. `docker compose config --quiet` validated.
-- **Dashboard**: API client already supported real endpoints/fallback; fixed
+- **Dashboard**: API client uses real endpoints and explicit error states; fixed
   Phase 5 commit gap by committing map deps + vitest TS types
   (`dashboard/package.json`, lockfile, `tsconfig.app.json`). Dashboard tests (10)
   and production build pass.
@@ -44,8 +83,12 @@ without removing working functionality.
 - **Service DB integration tests**: run `HYDROLEDGER_TEST_DATABASE_URL=... go test ./service -count=1` (disposable PostGIS) after additive API changes; not executed in this pass.
 - **Full compose runtime smoke**: `docker compose up --build` + health/readiness + UI profile (config validated; runtime smoke not executed).
 - **Live signed E2E scenarios A–F**: verifier/ledger components tested; full HTTP+DB+enrolled-device flows remain to execute in an integrated harness.
-- **Ledger event wiring**: migration 002 tables exist; service decisions/events not yet appended to audit ledger (design carefully; no competing source of truth).
-- **Identity enrollment for runtime server**: `cmd/server` uses in-memory registry (dev/demo). Production needs durable enrollment/key management.
+- **Ledger event wiring**: telemetry ingestion and escrow corroboration/expiry append
+  transactionally chained records to `audit_ledger_entry`; the ledger read endpoint
+  exposes those persisted records.
+- **Identity enrollment for runtime server**: `cmd/server` reads enrolled public
+  keys and revocation state from the durable `device` table. An administrative
+  enrollment workflow is still outside the runtime API.
 - **Neighbor-cell durable corroboration** and **allocation live API/UI wiring**: documented/open as appropriate.
 
 ### Evidence (actual)

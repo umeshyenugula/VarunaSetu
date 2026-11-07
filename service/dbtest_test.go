@@ -98,13 +98,15 @@ func waitForDB(t *testing.T, db *sql.DB) {
 func applyMigrations(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, thisFile, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(thisFile), "..", "migrations", "001_service.sql")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read migration: %v", err)
-	}
-	if _, err := db.Exec(string(b)); err != nil {
-		t.Fatalf("apply migration: %v\nSQL file: %s", err, path)
+	for _, name := range []string{"001_service.sql", "002_ledger.sql"} {
+		path := filepath.Join(filepath.Dir(thisFile), "..", "migrations", name)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read migration: %v", err)
+		}
+		if _, err := db.Exec(string(b)); err != nil {
+			t.Fatalf("apply migration: %v\nSQL file: %s", err, path)
+		}
 	}
 }
 

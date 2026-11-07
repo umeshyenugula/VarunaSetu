@@ -1,30 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listReadings, verifyLedgerIntegrity } from './client';
-import { ledgerEntries } from '../mocks/fixtures';
+import { getAnalytics, listReadings } from './client';
 
-describe('api client (integration/fallback behavior)', () => {
+describe('dashboard API client', () => {
   beforeEach(() => {
-    vi.unstubAllEnvs();
+    vi.stubEnv('VITE_API_BASE', 'http://api.test');
     vi.restoreAllMocks();
   });
 
-  it('falls back to SIMULATED fixtures when no API base is configured', async () => {
-    const res = await listReadings();
-    expect(res.source).toBe('simulated');
-    expect(res.items.length).toBeGreaterThan(0);
-    expect(res.items.every((r) => r.simulated)).toBe(true);
+  it('requests persisted readings from the configured API', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([{ id: 'r1' }]), { status: 200 }));
+    await expect(listReadings()).resolves.toEqual([{ id: 'r1' }]);
+    expect(fetch).toHaveBeenCalledWith('http://api.test/telemetry/readings?limit=500', { headers: { Accept: 'application/json' } });
   });
 
-  it('falls back to fixtures when fetch fails (missing endpoint)', async () => {
-    vi.stubEnv('VITE_API_BASE', 'http://localhost:9');
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unavailable'));
-    const res = await listReadings();
-    expect(res.source).toBe('simulated');
+  it('reports an unavailable API instead of fabricating data', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 503 }));
+    await expect(listReadings()).rejects.toThrow('HTTP 503');
   });
 
-  it('ledger integrity interface returns explicit simulated structural result', async () => {
-    const res = await verifyLedgerIntegrity(ledgerEntries);
-    expect(res.source).toBe('client-simulated');
-    expect(res.ok).toBe(true);
+  it('loads backend analytics without client-side replacement values', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ totalReadings: 4 }), { status: 200 }));
+    await expect(getAnalytics()).resolves.toEqual({ totalReadings: 4 });
   });
 });

@@ -11,10 +11,10 @@ VarunaSetu is a physics-informed, spatially aware urban water intelligence proto
 | Go verifier (core) | `hydroledger/verifier/` | Implemented, tested |
 | Spatial / identity | `hydroledger/verifier/spatial/`, `hydroledger/verifier/identity/` | Implemented, tested |
 | Durable service + API | `service/`, `cmd/server/`, `migrations/` | Implemented core ingest/escrow/read APIs; DB integration tests require PostGIS |
-| Audit ledger | `ledger/`, `migrations/002_ledger.sql` | Implemented/tested library; service event wiring pending |
+| Audit ledger | `ledger/`, `migrations/002_ledger.sql` | Implemented/tested library and persisted service event chain |
 | Allocation (research) | `alloc/` | Implemented/tested (NetworkX) |
 | Simulation/replay (research) | `sim/` | Implemented/tested Python harness |
-| Dashboard | `dashboard/`, `docs/demo.md` | Implemented/tested; uses live API when available, labeled **SIMULATED** fixtures otherwise |
+| Dashboard | `dashboard/` | Implemented/tested; live backend data only, with explicit API-unavailable errors |
 | Ops | `Dockerfile`, `docker-compose.yml`, `.env.example` | Config validated; runtime smoke recommended |
 
 ## Quick start
@@ -36,7 +36,7 @@ See [`docs/SETUP.md`](docs/SETUP.md), [`docs/TESTING.md`](docs/TESTING.md), [`do
 - `GET /ledger/entries` (requires migration 002 data/tables)
 - `GET /analytics/summary`, `GET /healthz`
 
-`cmd/server` uses an in-memory identity registry for dev/demo; production requires durable enrollment/key management.
+`cmd/server` resolves enrolled device keys and revocation state from the database.
 
 ## Verification
 

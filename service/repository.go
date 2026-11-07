@@ -2,18 +2,56 @@ package service
 
 import (
 	"context"
+	"crypto/ed25519"
 	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
 	"hydroledger-prototype/hydroledger/verifier"
+	"hydroledger-prototype/hydroledger/verifier/identity"
+	"hydroledger-prototype/ledger"
 )
 
 var ErrNotFound = errors.New("service: not found")
 var ErrIdempotencyConflict = errors.New("service: idempotency key reused with different payload")
 
 type Repository struct{ DB *sql.DB }
+
+// PublicKey resolves persisted device enrollment for signed telemetry.
+func (r *Repository) PublicKey(deviceID string) (ed25519.PublicKey, error) {
+	if err := r.ensureDB(); err != nil {
+		return nil, err
+	}
+	var key []byte
+	var revokedAt sql.NullTime
+	err := r.DB.QueryRow(`SELECT public_key, revoked_at FROM device WHERE id=$1`, deviceID).Scan(&key, &revokedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, identity.ErrUnknownDevice
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lookup device key: %w", err)
+	}
+	if revokedAt.Valid {
+		return nil, identity.ErrDeviceRevoked
+	}
+	if len(key) != ed25519.PublicKeySize {
+		return nil, identity.ErrInvalidPublicKey
+	}
+	return ed25519.PublicKey(append([]byte(nil), key...)), nil
+}
+
+// IsRevoked reports the persisted revocation state for a device.
+func (r *Repository) IsRevoked(deviceID string) bool {
+	if err := r.ensureDB(); err != nil {
+		return false
+	}
+	var revokedAt sql.NullTime
+	if err := r.DB.QueryRow(`SELECT revoked_at FROM device WHERE id=$1`, deviceID).Scan(&revokedAt); err != nil {
+		return false
+	}
+	return revokedAt.Valid
+}
 
 func (r *Repository) ensureDB() error {
 	if r == nil || r.DB == nil {
@@ -90,6 +128,9 @@ func (r *Repository) StoreReading(ctx context.Context, deviceID, key string, ts 
 			return ReadingResult{}, fmt.Errorf("insert escrow: %w", err)
 		}
 	}
+	if err := appendAuditEntryTx(ctx, tx, "telemetry_reading:"+id, ts); err != nil {
+		return ReadingResult{}, fmt.Errorf("append reading audit event: %w", err)
+	}
 
 	corroborated := 0
 	if t.RadarMM > cfg.RadarDryMM {
@@ -123,14 +164,29 @@ func corroborateEligibleRadarTx(ctx context.Context, tx *sql.Tx, cell string, re
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
 	n := 0
+	var pending []struct {
+		id, readingID string
+		amount        float64
+	}
 	for rows.Next() {
-		var id, readingID string
-		var amount float64
-		if err := rows.Scan(&id, &readingID, &amount); err != nil {
+		var item struct {
+			id, readingID string
+			amount        float64
+		}
+		if err := rows.Scan(&item.id, &item.readingID, &item.amount); err != nil {
 			return 0, err
 		}
+		pending = append(pending, item)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, item := range pending {
+		id, readingID, amount := item.id, item.readingID, item.amount
 		res, err := tx.ExecContext(ctx, `UPDATE escrow_record SET state='CORROBORATED', corroborated_at=$1, resolved_at=$1 WHERE id=$2 AND state='PENDING'`, readingTime, id)
 		if err != nil {
 			return 0, err
@@ -142,9 +198,12 @@ func corroborateEligibleRadarTx(ctx context.Context, tx *sql.Tx, cell string, re
 		if _, err = tx.ExecContext(ctx, `INSERT INTO ledger_entry (reading_id,escrow_id,amount_litres,entry_type) VALUES ($1,$2,$3,'COMMIT')`, readingID, id, amount); err != nil {
 			return 0, err
 		}
+		if err := appendAuditEntryTx(ctx, tx, "escrow_corroborated:"+id, readingTime); err != nil {
+			return 0, err
+		}
 		n++
 	}
-	return n, rows.Err()
+	return n, nil
 }
 
 // CorroborateEscrow conditionally transitions a single PENDING escrow.
@@ -170,6 +229,9 @@ func (r *Repository) CorroborateEscrow(ctx context.Context, id string, now time.
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO ledger_entry (reading_id,escrow_id,amount_litres,entry_type) VALUES ($1,$2,$3,'COMMIT')`, readingID, id, amount); err != nil {
+		return err
+	}
+	if err := appendAuditEntryTx(ctx, tx, "escrow_corroborated:"+id, now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -299,13 +361,28 @@ func (r *Repository) ExpireEscrows(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	var pending []struct {
+		id, readingID, buildingID string
+		amount                    float64
+	}
 	for rows.Next() {
-		var id, readingID, buildingID string
-		var amount float64
-		if err := rows.Scan(&id, &readingID, &buildingID, &amount); err != nil {
+		var item struct {
+			id, readingID, buildingID string
+			amount                    float64
+		}
+		if err := rows.Scan(&item.id, &item.readingID, &item.buildingID, &item.amount); err != nil {
 			return err
 		}
+		pending = append(pending, item)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, item := range pending {
+		id, readingID, buildingID, amount := item.id, item.readingID, item.buildingID, item.amount
 		res, err := tx.ExecContext(ctx, `UPDATE escrow_record SET state='EXPIRED_QUARANTINED',resolved_at=$1 WHERE id=$2 AND state='PENDING'`, now, id)
 		if err != nil {
 			return err
@@ -320,11 +397,38 @@ func (r *Repository) ExpireEscrows(ctx context.Context, now time.Time) error {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO ledger_entry (reading_id,escrow_id,amount_litres,entry_type) VALUES ($1,$2,$3,'RELEASE')`, readingID, id, amount); err != nil {
 			return err
 		}
+		if err := appendAuditEntryTx(ctx, tx, "escrow_expired:"+id, now); err != nil {
+			return err
+		}
 	}
-	if err = rows.Err(); err != nil {
+
+	return tx.Commit()
+}
+
+func appendAuditEntryTx(ctx context.Context, tx *sql.Tx, eventRef string, eventTime time.Time) error {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(922337203685477000)`); err != nil {
 		return err
 	}
-	return tx.Commit()
+	var previous ledger.Entry
+	err := tx.QueryRowContext(ctx, `SELECT seq, entry_hash, event_time FROM audit_ledger_entry ORDER BY seq DESC LIMIT 1 FOR UPDATE`).
+		Scan(&previous.Seq, &previous.Hash, &previous.Timestamp)
+	if errors.Is(err, sql.ErrNoRows) {
+		previous = ledger.Entry{Seq: 0, Hash: ledger.GenesisPrev}
+	} else if err != nil {
+		return err
+	} else {
+		previous.Seq++
+	}
+	entry := ledger.Entry{
+		Seq:       previous.Seq,
+		EventRef:  eventRef,
+		PrevHash:  previous.Hash,
+		Timestamp: eventTime.UTC(),
+	}
+	entry.Hash = entry.ComputeHash()
+	_, err = tx.ExecContext(ctx, `INSERT INTO audit_ledger_entry (seq,event_ref,prev_hash,entry_hash,event_time) VALUES ($1,$2,$3,$4,$5)`,
+		entry.Seq, entry.EventRef, entry.PrevHash, entry.Hash, entry.Timestamp)
+	return err
 }
 
 // ListReadings returns dashboard-facing reading projections (additive read API).
