@@ -1,0 +1,12 @@
+{
+  "fixture": "sim/fixtures/consistency_fixtures.json",
+  "fixture_sha256": "e124e46d764bd0e59de92699a8f2b1b33ef15aca899f74aebd945737f9f617a4",
+  "fixture_steps": 64,
+  "go_harness": "sim/gocli/main.go",
+  "network": "GOPROXY=off; no external Go modules are imported",
+  "status": "PASS",
+  "unavailable": null,
+  "decisions_compared": 58,
+  "resolutions_compared": 4,
+  "mismatches": []
+}

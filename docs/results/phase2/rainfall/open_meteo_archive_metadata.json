@@ -1,0 +1,39 @@
+{
+  "status": "OK",
+  "cached": false,
+  "request_url": "https://archive-api.open-meteo.com/v1/archive?latitude=17.5449&longitude=78.3864&start_date=2025-07-01&end_date=2025-09-30&hourly=rain%2Cprecipitation&timezone=Asia%2FKolkata",
+  "retrieved_at_utc": "2026-11-07T09:12:01Z",
+  "api_base": "https://archive-api.open-meteo.com/v1/archive",
+  "api_docs": "https://open-meteo.com/en/docs/historical-weather-api",
+  "api_params_verified_utc": "2026-11-07",
+  "parameters": {
+    "latitude": 17.5449,
+    "longitude": 78.3864,
+    "start_date": "2025-07-01",
+    "end_date": "2025-09-30",
+    "timezone": "Asia/Kolkata",
+    "hourly": [
+      "rain",
+      "precipitation"
+    ]
+  },
+  "expected_hourly_rows": 2208,
+  "actual_hourly_rows": 2208,
+  "missing_intervals": [],
+  "files": {
+    "raw_json": "open_meteo_archive_raw.json",
+    "tidy_csv": "open_meteo_archive_hourly.csv",
+    "raw_sha256": "8e877feb58bbfd9724c26522307a04a66d1004fd3461e20132f7cdceecaa077e",
+    "tidy_csv_sha256": "c6ba6c2c2f923b8b5c59c37beb99b17e45a06859c0d2d4e57efb4f3c7922d39d"
+  },
+  "response_metadata": {
+    "latitude": 17.539541,
+    "longitude": 78.347824,
+    "elevation": 604.0,
+    "timezone": "Asia/Kolkata",
+    "timezone_abbreviation": "GMT+5:30",
+    "utc_offset_seconds": 19800,
+    "generationtime_ms": 0.45943260192871094
+  },
+  "label": "gridded weather-context replay source (Open-Meteo archive), not rooftop ground truth"
+}

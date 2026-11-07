@@ -1,0 +1,44 @@
+{
+  "task": "Phase 2 Task 1 \u2014 Existing Ablation Integration",
+  "experiment_modified": false,
+  "implementation": "sim/ablation_experiment.py (Phase 0B rebuilt version; used unchanged)",
+  "config": "sim/config.py (seeds 1-10, 100000 events/seed/scenario, 7 scenarios)",
+  "historical_reference_f1": {
+    "static": 0.2545,
+    "physics": 0.6363,
+    "peer": 0.9536,
+    "hybrid": 0.9642,
+    "source": "Phase 2 spec historical reference (provided to the phase prompt)"
+  },
+  "actual_results": {
+    "static": {
+      "f1_mean": "0.269232",
+      "f1_std": "0.007420",
+      "precision_mean": "0.730538",
+      "recall_mean": "0.165091",
+      "fpr_mean": "0.026826"
+    },
+    "physics": {
+      "f1_mean": "0.862170",
+      "f1_std": "0.001385",
+      "precision_mean": "0.987049",
+      "recall_mean": "0.765345",
+      "fpr_mean": "0.004398"
+    },
+    "peer": {
+      "f1_mean": "0.643815",
+      "f1_std": "0.001343",
+      "precision_mean": "0.999994",
+      "recall_mean": "0.474728",
+      "fpr_mean": "0.000001"
+    },
+    "hybrid": {
+      "f1_mean": "0.926451",
+      "f1_std": "0.001340",
+      "precision_mean": "0.988550",
+      "recall_mean": "0.871699",
+      "fpr_mean": "0.004422"
+    }
+  },
+  "differences": "Actual results differ from the historical headline table because the generator, priors, and scenario mix differ from whatever produced that table. No parameter was tuned to reproduce the historical figures. See docs/results/METHOD.md and this report."
+}

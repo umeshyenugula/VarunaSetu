@@ -1,0 +1,21 @@
+scenario,scenario_label,escrow_treatment,tp,fp,fn,tn,escrow,escrow_resolved_accept,escrow_resolved_reject,escrow_unresolved,precision_mean,recall_mean,f1_mean,fpr_mean
+honest_rain_agree,"Honest rain, radar and peers agree",rejected,0,3202,0,96798,0,0,0,0,0.000000,0.000000,0.000000,0.032020
+honest_rain_agree,"Honest rain, radar and peers agree",accepted,0,3202,0,96798,0,0,0,0,0.000000,0.000000,0.000000,0.032020
+honest_rain_agree,"Honest rain, radar and peers agree",excluded,0,3202,0,96798,0,0,0,0,0.000000,0.000000,0.000000,0.032020
+honest_rain_agree,"Honest rain, radar and peers agree",resolved,0,3202,0,96798,0,0,0,0,0.000000,0.000000,0.000000,0.032020
+radar_conflict_then_corroborated,"Radar/peer conflict, later radar corroborates",rejected,0,30000,0,0,5000,0,0,0,0.000000,0.000000,0.000000,1.000000
+radar_conflict_then_corroborated,"Radar/peer conflict, later radar corroborates",accepted,0,25000,0,5000,5000,0,0,0,0.000000,0.000000,0.000000,0.833333
+radar_conflict_then_corroborated,"Radar/peer conflict, later radar corroborates",excluded,0,25000,0,0,5000,0,0,0,0.000000,0.000000,0.000000,1.000000
+radar_conflict_then_corroborated,"Radar/peer conflict, later radar corroborates",resolved,0,25000,0,5000,5000,5000,0,0,0.000000,0.000000,0.000000,0.833333
+radar_conflict_neighbor_corroborated,"Radar/peer conflict, neighbor cells corroborate",rejected,0,39960,0,0,6660,0,0,0,0.000000,0.000000,0.000000,1.000000
+radar_conflict_neighbor_corroborated,"Radar/peer conflict, neighbor cells corroborate",accepted,0,33300,0,6660,6660,0,0,0,0.000000,0.000000,0.000000,0.833333
+radar_conflict_neighbor_corroborated,"Radar/peer conflict, neighbor cells corroborate",excluded,0,33300,0,0,6660,0,0,0,0.000000,0.000000,0.000000,1.000000
+radar_conflict_neighbor_corroborated,"Radar/peer conflict, neighbor cells corroborate",resolved,0,33300,0,6660,6660,6660,0,0,0.000000,0.000000,0.000000,0.833333
+radar_conflict_expires,Radar/peer conflict expires uncorroborated,rejected,25000,0,0,0,5000,0,0,0,1.000000,1.000000,1.000000,0.000000
+radar_conflict_expires,Radar/peer conflict expires uncorroborated,accepted,20000,0,5000,0,5000,0,0,0,1.000000,0.800000,0.888889,0.000000
+radar_conflict_expires,Radar/peer conflict expires uncorroborated,excluded,20000,0,0,0,5000,0,0,0,1.000000,1.000000,1.000000,0.000000
+radar_conflict_expires,Radar/peer conflict expires uncorroborated,resolved,25000,0,0,0,5000,0,5000,0,1.000000,1.000000,1.000000,0.000000
+mixed_fraud_and_honest,Mixed honest rain and isolated fraud,rejected,2467,1991,0,78867,0,0,0,0,0.553491,1.000000,0.712520,0.024623
+mixed_fraud_and_honest,Mixed honest rain and isolated fraud,accepted,2467,1991,0,78867,0,0,0,0,0.553491,1.000000,0.712520,0.024623
+mixed_fraud_and_honest,Mixed honest rain and isolated fraud,excluded,2467,1991,0,78867,0,0,0,0,0.553491,1.000000,0.712520,0.024623
+mixed_fraud_and_honest,Mixed honest rain and isolated fraud,resolved,2467,1991,0,78867,0,0,0,0,0.553491,1.000000,0.712520,0.024623

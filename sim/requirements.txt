@@ -1,7 +1,14 @@
-# HydroLedger Phase 0B — simulation dependencies
+# HydroLedger simulation dependencies (Phase 0B + Phase 2)
 #
-# No third-party packages are required. The experiment, tests and CSV output
-# use the Python standard library only, so there is nothing to pin.
+# Core experiments and tests use the Python standard library only.
+# Tested with CPython 3.12+ on Windows 11 (amd64).
 #
-# Tested with CPython 3.12.10 and 3.14.0 on Windows 11 (amd64).
-# Intended minimum: CPython 3.10 (uses only stable standard-library APIs).
+# Optional (not required by the checked-in pipeline):
+# - `requests` can replace urllib in custom environments, but
+#   `sim/rainfall_retrieval.py` uses urllib from the standard library.
+# - `matplotlib`/`pandas` can be used for ad-hoc plotting, but no script
+#   in sim/ requires them.
+#
+# For a strict offline/stdlib run:
+#   python -m unittest discover -s sim/tests -t .
+#   python -m sim.phase2_runner --offline --skip-ablation
