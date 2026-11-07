@@ -5,6 +5,78 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 5 — 2026-11-07 — Phase 4 audit ledger and water allocation
+
+### What was done
+
+Implemented Phase 4 under allowed paths (`ledger/`, `alloc/`, `migrations/`
+new numbered files only, `docs/ledger.md`, `docs/alloc.md`). `service/` was
+**not modified**. Earlier phases remain unchanged.
+
+- **SHA-256 hash-chained ledger (`ledger/ledger.go`, `ledger/ledger_test.go`)**:
+  append-only `Entry` with `Seq`, `EventRef`, `PrevHash`, `Hash`, `Timestamp`.
+  Canonical serialization is precisely specified and implemented (schema
+  `hydroledger.ledger.entry.v1`; LF-separated fields in order: schema, base-10
+  seq, event ref, lower-case 64-char prev hash/genesis zeros, RFC3339Nano UTC;
+  `hash=hex_lower(SHA-256(canonical bytes))`). `Append()` assigns linkage/hash;
+  `Verify()`/`VerifyEntries()` detect sequence gaps, prev-hash breaks, and hash
+  tampering. Tests modify a historical entry and verify detection (and also
+  detect linkage break if only that entry's hash is recomputed). Docs state the
+  limitation: a hash chain alone cannot prevent an administrator with storage/
+  key control from rewriting the entire chain.
+- **Ed25519 signed checkpoints**: `Checkpoint` signs/verifies
+  `(schema, seq, head_hash, RFC3339Nano UTC timestamp, key_id)` at interval
+  `N`; `VerifyCheckpoint` checks signature and head binding. `Witness`
+  interface supports external anchoring; `MaybeCheckpoint` enforces interval.
+  Tests cover valid checkpoint, modified checkpoint, rewritten chain with
+  checkpoint forged under attacker key rejected by legitimate verifier key, and
+  invalid signature. Key rotation and remaining trust assumptions documented.
+- **Durable schema (`migrations/002_ledger.sql`)**: additive
+  `audit_ledger_entry` and `audit_ledger_checkpoint` tables; no service tables
+  modified.
+- **Water allocation prototype (`alloc/model.py`, `alloc/test_alloc.py`,
+  Python+NetworkX)**: min-cost-flow redistribution. Supplies are ACCEPT
+  readings with verified integer-litre stored volume; demands have integer
+  requested litres and explicit priority (1 highest). Transfer edges carry
+  integer capacity and cost; effective weight adds `PRIORITY_WEIGHT*(priority-1)`
+  for the documented fairness/priority rule. Non-ACCEPT supplies excluded.
+  Six-node worked example: 3 supplies + 3 demands (6 domain nodes), with a
+  non-ACCEPT supply excluded; invariants and priority outcome asserted.
+  Property-style randomized tests (50 deterministic cases, seed 42) verify water
+  conservation, capacity constraints, supply limitations/ACCEPT-only sourcing,
+  demand fulfillment bounds, and allocation validity. No claim of real-world
+  water savings or flood reduction.
+- **Docs**: `docs/ledger.md`, `docs/alloc.md`.
+
+### Evidence (WDAC-safe containerized execution)
+
+Windows Application Control on this host blocked freshly built host test
+binaries in-session; tests were executed via Docker (Linux containers) as an
+authorized/safe execution path:
+
+```text
+docker run --rm -v <repo>:/src -w /src golang:1.26.8 go test ./ledger/... ./hydroledger/... -count=1
+-> ok hydroledger-prototype/ledger 0.014s
+-> ok hydroledger-prototype/hydroledger/verifier 0.022s
+-> ok hydroledger-prototype/hydroledger/verifier/identity 0.030s
+-> ok hydroledger-prototype/hydroledger/verifier/spatial 0.013s
+
+docker run --rm -v <repo>:/src -w /src python:3.14-slim sh -lc "pip install --no-cache-dir networkx && python -m unittest discover -t . -s alloc -p 'test*.py' -v"
+-> Ran 3 tests ... OK (only_accept_readings, property_randomized, six_node_worked_example)
+```
+
+### Limitations
+
+- Ledger/checkpointer is in-memory; migration 002 provides durable storage
+  shape but service integration/witness deployment is out of scope.
+- Hash chain + checkpoint do not prevent a privileged rewriter from replacing
+  the full chain; external witnessing/transparency and key custody controls are
+  required for stronger guarantees.
+- Allocation is a prototype model; inputs/costs/priorities must come from
+  validated operational data. No real-world water-savings/flood-reduction claims.
+
+---
+
 ## Entry 4 — 2026-11-07 — Phase 3 durable backend service
 
 ### What was done
