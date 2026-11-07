@@ -1,0 +1,25 @@
+{
+  "note": "End-to-end service latency harness implemented in service/api_integration_test.go (TestLoadService). Run with HYDROLEDGER_RUN_LOAD=1 and a disposable PostgreSQL+PostGIS container. Separate from verifier microbenchmarks in docs/baseline_results.txt.",
+  "execution": "Not executed to completion in this session: Windows Application Control blocked execution of rebuilt Go test binaries after fixes, preventing an automated load run here. Use a machine/CI runner that allows `go test` binaries and set HYDROLEDGER_TEST_DATABASE_URL or Docker.",
+  "environment_template": {
+    "go_version": "go1.26.8",
+    "goos": "windows",
+    "goarch": "amd64",
+    "gomaxprocs": "record at run time",
+    "postgresql": "record `SELECT version()`",
+    "postgis": "record `SELECT PostGIS_Version()`",
+    "cpu": "record model/core count",
+    "memory": "record total/available",
+    "os": "record OS version/build"
+  },
+  "required_metrics": [
+    "end-to-end p50 latency",
+    "end-to-end p95 latency",
+    "end-to-end p99 latency",
+    "throughput",
+    "CPU usage (or GOMAXPROCS/runtime stats)",
+    "memory usage",
+    "database write latency",
+    "results under different concurrent device loads"
+  ]
+}

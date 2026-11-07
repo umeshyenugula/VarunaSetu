@@ -5,6 +5,85 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 4 — 2026-11-07 — Phase 3 durable backend service
+
+### What was done
+
+Implemented Phase 3 under the allowed paths (`service/`, `migrations/`,
+`docs/service.md`), importing earlier packages as libraries without modifying
+`hydroledger/` or prior phase behavior.
+
+- **Schema (`migrations/001_service.sql`)**: PostgreSQL/PostGIS/pgcrypto
+  extensions; `building`, `device`, `telemetry_reading`,
+  `verification_decision`, `escrow_record` (`PENDING`/`CORROBORATED`/
+  `EXPIRED_QUARANTINED`), and `ledger_entry` placeholder; PK/FK/UNIQUE/CHECK
+  constraints; idempotency `UNIQUE(device_id,idempotency_key)` and payload hash;
+  H3 cell/time and device/time indexes, BRIN time index, GiST spatial indexes;
+  append-only triggers for readings/decisions; restricted `hydroledger_api`
+  grants; `purge_telemetry_readings` retention helper.
+- **Repository (`service/repository.go`)**: serializable `StoreReading` that
+  checks idempotency, locks/reserves capacity, persists reading/decision/
+  ledger, creates durable escrow for `PROVISIONAL_ESCROW`, and applies durable
+  radar-based corroboration. Conditional `state='PENDING'` transitions plus
+  row locks/`SKIP LOCKED` make expiry/corroboration races resolve to one
+  terminal state. `RecentPeerReadings`/`RecentPeers` provide DB-backed eligible
+  peers.
+- **HTTP API (`service/service.go`, `service/models.go`)**: signed-telemetry
+  middleware using Phase 1 identity (stateless signature/enrollment/revocation/
+  timestamp checks + durable idempotency lookup); strict JSON validation;
+  `POST /telemetry/readings` returns 201/200(idempotent)/409(conflict);
+  `GET /telemetry/readings/{id}`, `GET /escrows/{id}`,
+  `GET /cells/{h3_index}/status` (canonical H3 validation). Request timeouts,
+  structured logging, context cancellation handling.
+- **Verifier wiring**: ingestion retrieves persisted eligible peers from DB and
+  seeds a scratch verifier in event-time order before `Evaluate`, preserving
+  existing verifier logic (Task 3). The `hydroledger/verifier*` packages were
+  not modified.
+- **Worker**: `StartExpiryWorker`/`Close` run restart-recoverable expiry with
+  row locking.
+- **Tests/harness**: `service/dbtest_test.go`, `service/api_integration_test.go`
+  (disposable PostGIS container or `HYDROLEDGER_TEST_DATABASE_URL`; `pgx`
+  stdlib), including migrations, duplicate/delayed/reordered/malformed
+  requests, idempotency conflict, DB-backed peer supply, escrow expiry/race/
+  corroboration/recovery cases, and `HYDROLEDGER_RUN_LOAD=1` load harness
+  writing `docs/results/phase3/load_results.json`.
+
+### Evidence
+
+- `go version`: `go1.26.8 windows/amd64`.
+- `go vet ./...` clean.
+- `go test ./hydroledger/...` (cached rerun): `ok verifier 1.098s`, `ok
+  verifier/identity 1.087s`, `ok verifier/spatial 1.093s` (Phases 0–2 packages
+  unaffected).
+- `TestMigrationsExecute` passed against disposable `postgis/postgis:16-3.4`,
+  including idempotent re-run — migrations execute successfully.
+- After fixes, `TestPostTelemetry_DuplicateDelayedReorderedMalformed` and
+  `TestPeerRetrievalSuppliesDBPeers` passed against disposable PostGIS.
+- `service` package compiles and vets.
+
+### Limitations
+
+- **Windows Application Control blocked rebuilt Go test binaries in this
+  session** after later edits, preventing a clean in-session re-run of the
+  modified escrow/race/corroboration/recovery/atomicity integration tests and
+  the load test. These cases are implemented and covered by the added tests;
+  run `go test ./service -count=1` in a non-restricted environment/CI with
+  Docker or `HYDROLEDGER_TEST_DATABASE_URL`.
+- **Load results not executed here**. `TestLoadService` is implemented and
+  writes `docs/results/phase3/load_results.json` (hw/sw metadata + p50/p95/p99,
+  throughput, CPU/memory/DB write latency, concurrent device loads). Execute
+  with `HYDROLEDGER_RUN_LOAD=1`; keep separate from verifier microbenchmarks.
+- Durable escrow corroboration in this service is **radar-based/transactional**
+  and does not replicate the in-memory verifier's neighbor-cell escrow resolver
+  as a cross-cell durable path.
+- `geom` spatial columns are present/indexed but not populated by ingestion;
+  retention is deployment-scheduled via `purge_telemetry_readings`.
+- The executable must register a PostgreSQL `database/sql` driver; tests use
+  `github.com/jackc/pgx/v5/stdlib`. Dependency additions support the service;
+  earlier packages remain unmodified.
+
+---
+
 ## Entry 3 — 2026-11-07 — Phase 1 H3 spatial indexing and device identity
 
 ### What was done
