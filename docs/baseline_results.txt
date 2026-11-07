@@ -1,0 +1,374 @@
+# HydroLedger verifier - baseline test and benchmark results
+# Raw output of the commands below, captured on the machine described here.
+
+Generated (UTC):  2026-11-07T06:45:43Z
+Go version:       go version go1.24.13 linux/amd64
+GOOS/GOARCH:      linux / amd64
+CPU model:        Intel(R) Xeon(R) Processor @ 2.30GHz
+CPUs visible:     1  (lscpu CPU(s): 1)
+Kernel:           Linux 6.18.44-fc-v310
+Module:           module hydroledger-prototype
+
+Caveat: this is a single-vCPU virtual machine, so GOMAXPROCS is 1 and the
+BenchmarkEvaluateParallel results cannot show multi-core scaling or contention.
+Results from a shared VM are noisy; compare the repeated runs below.
+
+================================================================
+## 1. go vet ./...
+================================================================
+exit status: 0
+
+================================================================
+## 2. go test ./... -race -count=1
+================================================================
+ok  	hydroledger-prototype/hydroledger/verifier	1.052s
+exit status: 0
+
+================================================================
+## 3. go test ./... -run '^$' -bench . -benchmem -count=5
+================================================================
+goos: linux
+goarch: amd64
+pkg: hydroledger-prototype/hydroledger/verifier
+cpu: Intel(R) Xeon(R) Processor @ 2.30GHz
+BenchmarkEvaluate         	 2084593	       572.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluate         	 2064102	       590.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluate         	 2095347	       566.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluate         	 2115597	       593.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluate         	 1935992	       564.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/same_cell         	 1967853	       609.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/same_cell         	 1899246	       565.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/same_cell         	 2097990	       576.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/same_cell         	 1824724	       580.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/same_cell         	 2005693	       589.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/many_cells        	 2105396	       566.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/many_cells        	 2114143	       561.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/many_cells        	 2120893	       557.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/many_cells        	 2135173	       567.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEvaluateParallel/many_cells        	 2165296	       563.1 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	hydroledger-prototype/hydroledger/verifier	26.607s
+exit status: 0
+
+================================================================
+## 4. go test ./... -race -count=1 -v   (per-test listing)
+================================================================
+=== RUN   TestEscrow_Resolution
+=== RUN   TestEscrow_Resolution/pending_shortly_before_the_TTL
+=== RUN   TestEscrow_Resolution/still_pending_at_exactly_the_TTL
+=== RUN   TestEscrow_Resolution/expires_uncorroborated_just_after_the_TTL
+=== RUN   TestEscrow_Resolution/expires_uncorroborated_long_after_the_TTL
+=== RUN   TestEscrow_Resolution/later_radar_3_mm_confirms
+=== RUN   TestEscrow_Resolution/later_radar_just_above_0.5_mm_confirms
+=== RUN   TestEscrow_Resolution/later_radar_exactly_0.5_mm_does_not_confirm
+=== RUN   TestEscrow_Resolution/later_radar_0_does_not_confirm
+=== RUN   TestEscrow_Resolution/radar_reading_with_the_same_timestamp_is_not_later
+=== RUN   TestEscrow_Resolution/radar_reading_before_the_escrowed_one_is_not_later
+=== RUN   TestEscrow_Resolution/radar_reading_in_another_cell_does_not_confirm
+=== RUN   TestEscrow_Resolution/radar_reading_exactly_at_the_TTL_still_confirms
+=== RUN   TestEscrow_Resolution/radar_reading_just_after_the_TTL_is_too_late
+=== RUN   TestEscrow_Resolution/confirmation_seen_in_time_survives_a_late_sweep
+=== RUN   TestEscrow_Resolution/invalid_later_reading_cannot_confirm
+=== RUN   TestEscrow_Resolution/over-capacity_later_reading_cannot_confirm
+=== RUN   TestEscrow_Resolution/a_sweep_earlier_than_the_escrowed_reading_leaves_it_alone
+--- PASS: TestEscrow_Resolution (0.00s)
+    --- PASS: TestEscrow_Resolution/pending_shortly_before_the_TTL (0.00s)
+    --- PASS: TestEscrow_Resolution/still_pending_at_exactly_the_TTL (0.00s)
+    --- PASS: TestEscrow_Resolution/expires_uncorroborated_just_after_the_TTL (0.00s)
+    --- PASS: TestEscrow_Resolution/expires_uncorroborated_long_after_the_TTL (0.00s)
+    --- PASS: TestEscrow_Resolution/later_radar_3_mm_confirms (0.00s)
+    --- PASS: TestEscrow_Resolution/later_radar_just_above_0.5_mm_confirms (0.00s)
+    --- PASS: TestEscrow_Resolution/later_radar_exactly_0.5_mm_does_not_confirm (0.00s)
+    --- PASS: TestEscrow_Resolution/later_radar_0_does_not_confirm (0.00s)
+    --- PASS: TestEscrow_Resolution/radar_reading_with_the_same_timestamp_is_not_later (0.00s)
+    --- PASS: TestEscrow_Resolution/radar_reading_before_the_escrowed_one_is_not_later (0.00s)
+    --- PASS: TestEscrow_Resolution/radar_reading_in_another_cell_does_not_confirm (0.00s)
+    --- PASS: TestEscrow_Resolution/radar_reading_exactly_at_the_TTL_still_confirms (0.00s)
+    --- PASS: TestEscrow_Resolution/radar_reading_just_after_the_TTL_is_too_late (0.00s)
+    --- PASS: TestEscrow_Resolution/confirmation_seen_in_time_survives_a_late_sweep (0.00s)
+    --- PASS: TestEscrow_Resolution/invalid_later_reading_cannot_confirm (0.00s)
+    --- PASS: TestEscrow_Resolution/over-capacity_later_reading_cannot_confirm (0.00s)
+    --- PASS: TestEscrow_Resolution/a_sweep_earlier_than_the_escrowed_reading_leaves_it_alone (0.00s)
+=== RUN   TestEscrow_RadarOnlyConfirmsOlderEscrows
+--- PASS: TestEscrow_RadarOnlyConfirmsOlderEscrows (0.00s)
+=== RUN   TestEscrow_NeighborCorroboration
+=== RUN   TestEscrow_NeighborCorroboration/two_neighbors,_3_devices_each,_raining
+=== RUN   TestEscrow_NeighborCorroboration/medians_exactly_at_2.0_mm_count
+=== RUN   TestEscrow_NeighborCorroboration/one_neighbor_median_just_below_2.0_mm
+=== RUN   TestEscrow_NeighborCorroboration/only_one_neighbor_configured
+=== RUN   TestEscrow_NeighborCorroboration/one_neighbor_has_only_2_devices
+=== RUN   TestEscrow_NeighborCorroboration/exactly_3_devices_is_enough
+=== RUN   TestEscrow_NeighborCorroboration/three_configured,_two_qualify
+=== RUN   TestEscrow_NeighborCorroboration/configured_neighbor_without_any_data
+=== RUN   TestEscrow_NeighborCorroboration/neighbor_observations_exactly_10_minutes_old_are_recent
+=== RUN   TestEscrow_NeighborCorroboration/neighbor_observations_10_minutes_and_1ns_old_are_not_recent
+=== RUN   TestEscrow_NeighborCorroboration/duplicate_neighbor_ids_count_once
+=== RUN   TestEscrow_NeighborCorroboration/the_escrow's_own_cell_listed_as_neighbor_does_not_count
+=== RUN   TestEscrow_NeighborCorroboration/neighbors_never_configured
+=== RUN   TestEscrow_NeighborCorroboration/neighbor_relation_is_directed
+=== RUN   TestEscrow_NeighborCorroboration/NeighborMinCells_=_1_is_honoured
+=== RUN   TestEscrow_NeighborCorroboration/NeighborMinDevices_=_4_is_honoured
+--- PASS: TestEscrow_NeighborCorroboration (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/two_neighbors,_3_devices_each,_raining (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/medians_exactly_at_2.0_mm_count (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/one_neighbor_median_just_below_2.0_mm (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/only_one_neighbor_configured (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/one_neighbor_has_only_2_devices (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/exactly_3_devices_is_enough (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/three_configured,_two_qualify (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/configured_neighbor_without_any_data (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/neighbor_observations_exactly_10_minutes_old_are_recent (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/neighbor_observations_10_minutes_and_1ns_old_are_not_recent (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/duplicate_neighbor_ids_count_once (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/the_escrow's_own_cell_listed_as_neighbor_does_not_count (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/neighbors_never_configured (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/neighbor_relation_is_directed (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/NeighborMinCells_=_1_is_honoured (0.00s)
+    --- PASS: TestEscrow_NeighborCorroboration/NeighborMinDevices_=_4_is_honoured (0.00s)
+=== RUN   TestEscrow_NeighborEvidenceMustBeRecentAtSweepTime
+--- PASS: TestEscrow_NeighborEvidenceMustBeRecentAtSweepTime (0.00s)
+=== RUN   TestEscrow_SingleCellMajorityStaysProvisional
+=== RUN   TestEscrow_SingleCellMajorityStaysProvisional/neighbors_never_configured
+=== RUN   TestEscrow_SingleCellMajorityStaysProvisional/neighbors_configured_but_silent
+=== RUN   TestEscrow_SingleCellMajorityStaysProvisional/neighbors_configured_and_dry
+=== RUN   TestEscrow_SingleCellMajorityStaysProvisional/only_one_neighbor_is_raining
+--- PASS: TestEscrow_SingleCellMajorityStaysProvisional (0.00s)
+    --- PASS: TestEscrow_SingleCellMajorityStaysProvisional/neighbors_never_configured (0.00s)
+    --- PASS: TestEscrow_SingleCellMajorityStaysProvisional/neighbors_configured_but_silent (0.00s)
+    --- PASS: TestEscrow_SingleCellMajorityStaysProvisional/neighbors_configured_and_dry (0.00s)
+    --- PASS: TestEscrow_SingleCellMajorityStaysProvisional/only_one_neighbor_is_raining (0.00s)
+=== RUN   TestKnown_CrossCellCollusionCorroborates
+=== RUN   TestKnown_CrossCellCollusionCorroborates/two_coordinated_neighbor_cells_corroborate_a_fabricated_escrow_(KNOWN_LIMITATION)
+=== RUN   TestKnown_CrossCellCollusionCorroborates/control:_coordination_in_only_one_neighbor_cell_is_not_enough
+--- PASS: TestKnown_CrossCellCollusionCorroborates (0.00s)
+    --- PASS: TestKnown_CrossCellCollusionCorroborates/two_coordinated_neighbor_cells_corroborate_a_fabricated_escrow_(KNOWN_LIMITATION) (0.00s)
+    --- PASS: TestKnown_CrossCellCollusionCorroborates/control:_coordination_in_only_one_neighbor_cell_is_not_enough (0.00s)
+=== RUN   TestResolveEscrows_OrderIsDeterministic
+--- PASS: TestResolveEscrows_OrderIsDeterministic (0.00s)
+=== RUN   TestSetNeighbors_Normalisation
+--- PASS: TestSetNeighbors_Normalisation (0.00s)
+=== RUN   TestConcurrentUse
+--- PASS: TestConcurrentUse (0.03s)
+=== RUN   TestEvaluate_Decisions
+=== RUN   TestEvaluate_Decisions/enough_peers_and_radar_agree_->_accept
+=== RUN   TestEvaluate_Decisions/radar_dry_but_coherent_peers_report_rain_->_escrow
+=== RUN   TestEvaluate_Decisions/isolated_positive_outlier_->_quarantine
+=== RUN   TestEvaluate_Decisions/positive_outlier_beats_the_radar/peer_conflict
+=== RUN   TestEvaluate_Decisions/peers_agree_with_claim_but_radar_bound_is_exceeded_(radar_not_dry)
+=== RUN   TestEvaluate_Decisions/negative_deviation_(under-claim)_is_not_quarantined
+=== RUN   TestEvaluate_Decisions/dry_radar,_rainy_but_incoherent_peers_->_no_escrow,_bound_exceeded
+=== RUN   TestEvaluate_Decisions/dry_radar,_dry_peers,_claim_within_bound_->_accept
+=== RUN   TestEvaluate_Decisions/wet_radar_and_rainy_peers_agree_->_accept
+=== RUN   TestEvaluate_Decisions/peer_median_exactly_at_rain_threshold_counts_as_rain_->_escrow
+=== RUN   TestEvaluate_Decisions/peer_median_just_below_rain_threshold_->_accept
+=== RUN   TestEvaluate_Decisions/coherence_uses_25%_of_median_when_larger_than_1_mm_(spread_1.5_<=_2)
+=== RUN   TestEvaluate_Decisions/coherence_just_exceeded_(spread_2.75_>_2)_->_no_escrow
+=== RUN   TestEvaluate_Decisions/coherence_floor_of_1_mm_applies_for_small_medians_(spread_exactly_1)
+=== RUN   TestEvaluate_Decisions/coherence_floor_just_exceeded_(spread_1.25_>_1)_->_no_escrow
+=== RUN   TestEvaluate_Decisions/too_few_peers,_within_physical_bound_->_radar_physics_fallback
+=== RUN   TestEvaluate_Decisions/no_peers_at_all,_within_physical_bound_->_radar_physics_fallback
+=== RUN   TestEvaluate_Decisions/too_few_peers,_above_physical_bound_->_quarantine_for_review
+--- PASS: TestEvaluate_Decisions (0.00s)
+    --- PASS: TestEvaluate_Decisions/enough_peers_and_radar_agree_->_accept (0.00s)
+    --- PASS: TestEvaluate_Decisions/radar_dry_but_coherent_peers_report_rain_->_escrow (0.00s)
+    --- PASS: TestEvaluate_Decisions/isolated_positive_outlier_->_quarantine (0.00s)
+    --- PASS: TestEvaluate_Decisions/positive_outlier_beats_the_radar/peer_conflict (0.00s)
+    --- PASS: TestEvaluate_Decisions/peers_agree_with_claim_but_radar_bound_is_exceeded_(radar_not_dry) (0.00s)
+    --- PASS: TestEvaluate_Decisions/negative_deviation_(under-claim)_is_not_quarantined (0.00s)
+    --- PASS: TestEvaluate_Decisions/dry_radar,_rainy_but_incoherent_peers_->_no_escrow,_bound_exceeded (0.00s)
+    --- PASS: TestEvaluate_Decisions/dry_radar,_dry_peers,_claim_within_bound_->_accept (0.00s)
+    --- PASS: TestEvaluate_Decisions/wet_radar_and_rainy_peers_agree_->_accept (0.00s)
+    --- PASS: TestEvaluate_Decisions/peer_median_exactly_at_rain_threshold_counts_as_rain_->_escrow (0.00s)
+    --- PASS: TestEvaluate_Decisions/peer_median_just_below_rain_threshold_->_accept (0.00s)
+    --- PASS: TestEvaluate_Decisions/coherence_uses_25%_of_median_when_larger_than_1_mm_(spread_1.5_<=_2) (0.00s)
+    --- PASS: TestEvaluate_Decisions/coherence_just_exceeded_(spread_2.75_>_2)_->_no_escrow (0.00s)
+    --- PASS: TestEvaluate_Decisions/coherence_floor_of_1_mm_applies_for_small_medians_(spread_exactly_1) (0.00s)
+    --- PASS: TestEvaluate_Decisions/coherence_floor_just_exceeded_(spread_1.25_>_1)_->_no_escrow (0.00s)
+    --- PASS: TestEvaluate_Decisions/too_few_peers,_within_physical_bound_->_radar_physics_fallback (0.00s)
+    --- PASS: TestEvaluate_Decisions/no_peers_at_all,_within_physical_bound_->_radar_physics_fallback (0.00s)
+    --- PASS: TestEvaluate_Decisions/too_few_peers,_above_physical_bound_->_quarantine_for_review (0.00s)
+=== RUN   TestEvaluate_PhysicalBoundBoundary
+=== RUN   TestEvaluate_PhysicalBoundBoundary/fallback:_R_obs_==_R_max_is_accepted
+=== RUN   TestEvaluate_PhysicalBoundBoundary/fallback:_R_obs_just_above_R_max_is_quarantined
+=== RUN   TestEvaluate_PhysicalBoundBoundary/peers:_R_obs_==_R_max_is_accepted
+=== RUN   TestEvaluate_PhysicalBoundBoundary/peers:_R_obs_above_R_max_is_quarantined
+--- PASS: TestEvaluate_PhysicalBoundBoundary (0.00s)
+    --- PASS: TestEvaluate_PhysicalBoundBoundary/fallback:_R_obs_==_R_max_is_accepted (0.00s)
+    --- PASS: TestEvaluate_PhysicalBoundBoundary/fallback:_R_obs_just_above_R_max_is_quarantined (0.00s)
+    --- PASS: TestEvaluate_PhysicalBoundBoundary/peers:_R_obs_==_R_max_is_accepted (0.00s)
+    --- PASS: TestEvaluate_PhysicalBoundBoundary/peers:_R_obs_above_R_max_is_quarantined (0.00s)
+=== RUN   TestEvaluate_RadarBoundary
+=== RUN   TestEvaluate_RadarBoundary/radar_exactly_0.5_mm_is_dry
+=== RUN   TestEvaluate_RadarBoundary/radar_just_above_0.5_mm_is_not_dry
+=== RUN   TestEvaluate_RadarBoundary/radar_0_is_dry
+--- PASS: TestEvaluate_RadarBoundary (0.00s)
+    --- PASS: TestEvaluate_RadarBoundary/radar_exactly_0.5_mm_is_dry (0.00s)
+    --- PASS: TestEvaluate_RadarBoundary/radar_just_above_0.5_mm_is_not_dry (0.00s)
+    --- PASS: TestEvaluate_RadarBoundary/radar_0_is_dry (0.00s)
+=== RUN   TestEvaluate_PeerEligibility
+=== RUN   TestEvaluate_PeerEligibility/exactly_3_peers_is_too_few
+=== RUN   TestEvaluate_PeerEligibility/exactly_4_peers_is_enough
+=== RUN   TestEvaluate_PeerEligibility/peer_exactly_10_minutes_old_is_eligible
+=== RUN   TestEvaluate_PeerEligibility/peer_10_minutes_and_1ns_old_is_not_eligible
+=== RUN   TestEvaluate_PeerEligibility/peer_9m59s_old_is_eligible
+=== RUN   TestEvaluate_PeerEligibility/stale_peers_do_not_count_even_when_numerous
+=== RUN   TestEvaluate_PeerEligibility/one_latest_observation_per_device:_repeats_count_once
+=== RUN   TestEvaluate_PeerEligibility/the_evaluated_device's_own_earlier_reading_is_not_a_peer
+=== RUN   TestEvaluate_PeerEligibility/a_peer_newer_than_the_reading_(negative_age)_is_eligible_(assumption_A5)
+--- PASS: TestEvaluate_PeerEligibility (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/exactly_3_peers_is_too_few (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/exactly_4_peers_is_enough (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/peer_exactly_10_minutes_old_is_eligible (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/peer_10_minutes_and_1ns_old_is_not_eligible (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/peer_9m59s_old_is_eligible (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/stale_peers_do_not_count_even_when_numerous (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/one_latest_observation_per_device:_repeats_count_once (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/the_evaluated_device's_own_earlier_reading_is_not_a_peer (0.00s)
+    --- PASS: TestEvaluate_PeerEligibility/a_peer_newer_than_the_reading_(negative_age)_is_eligible_(assumption_A5) (0.00s)
+=== RUN   TestEvaluate_PeersAreScopedToTheCell
+--- PASS: TestEvaluate_PeersAreScopedToTheCell (0.00s)
+=== RUN   TestEvaluate_InvalidInput
+=== RUN   TestEvaluate_InvalidInput/empty_device_id
+=== RUN   TestEvaluate_InvalidInput/empty_cell_id
+=== RUN   TestEvaluate_InvalidInput/zero_timestamp
+=== RUN   TestEvaluate_InvalidInput/negative_claimed_litres
+=== RUN   TestEvaluate_InvalidInput/NaN_claimed_litres
+=== RUN   TestEvaluate_InvalidInput/+Inf_claimed_litres
+=== RUN   TestEvaluate_InvalidInput/zero_roof_area
+=== RUN   TestEvaluate_InvalidInput/negative_roof_area
+=== RUN   TestEvaluate_InvalidInput/NaN_roof_area
+=== RUN   TestEvaluate_InvalidInput/zero_runoff_coefficient
+=== RUN   TestEvaluate_InvalidInput/negative_runoff_coefficient
+=== RUN   TestEvaluate_InvalidInput/runoff_coefficient_above_1
+=== RUN   TestEvaluate_InvalidInput/NaN_runoff_coefficient
+=== RUN   TestEvaluate_InvalidInput/negative_stored_litres
+=== RUN   TestEvaluate_InvalidInput/NaN_stored_litres
+=== RUN   TestEvaluate_InvalidInput/negative_capacity
+=== RUN   TestEvaluate_InvalidInput/+Inf_capacity
+=== RUN   TestEvaluate_InvalidInput/negative_radar
+=== RUN   TestEvaluate_InvalidInput/NaN_radar
+=== RUN   TestEvaluate_InvalidInput/+Inf_radar
+=== RUN   TestEvaluate_InvalidInput/derived_depth_overflows_to_+Inf
+=== RUN   TestEvaluate_InvalidInput/control:_unmutated_reading_is_valid
+=== RUN   TestEvaluate_InvalidInput/zero_claim_and_zero_capacity_are_valid_inputs
+--- PASS: TestEvaluate_InvalidInput (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/empty_device_id (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/empty_cell_id (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/zero_timestamp (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/negative_claimed_litres (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/NaN_claimed_litres (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/+Inf_claimed_litres (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/zero_roof_area (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/negative_roof_area (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/NaN_roof_area (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/zero_runoff_coefficient (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/negative_runoff_coefficient (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/runoff_coefficient_above_1 (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/NaN_runoff_coefficient (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/negative_stored_litres (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/NaN_stored_litres (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/negative_capacity (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/+Inf_capacity (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/negative_radar (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/NaN_radar (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/+Inf_radar (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/derived_depth_overflows_to_+Inf (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/control:_unmutated_reading_is_valid (0.00s)
+    --- PASS: TestEvaluate_InvalidInput/zero_claim_and_zero_capacity_are_valid_inputs (0.00s)
+=== RUN   TestEvaluate_Capacity
+=== RUN   TestEvaluate_Capacity/stored_exceeds_capacity
+=== RUN   TestEvaluate_Capacity/claim_exceeds_free_space
+=== RUN   TestEvaluate_Capacity/claim_just_exceeds_free_space
+=== RUN   TestEvaluate_Capacity/claim_exactly_fills_free_space
+=== RUN   TestEvaluate_Capacity/stored_exactly_at_capacity,_zero_claim
+=== RUN   TestEvaluate_Capacity/stored_exactly_at_capacity,_positive_claim
+=== RUN   TestEvaluate_Capacity/claim_larger_than_whole_tank
+--- PASS: TestEvaluate_Capacity (0.00s)
+    --- PASS: TestEvaluate_Capacity/stored_exceeds_capacity (0.00s)
+    --- PASS: TestEvaluate_Capacity/claim_exceeds_free_space (0.00s)
+    --- PASS: TestEvaluate_Capacity/claim_just_exceeds_free_space (0.00s)
+    --- PASS: TestEvaluate_Capacity/claim_exactly_fills_free_space (0.00s)
+    --- PASS: TestEvaluate_Capacity/stored_exactly_at_capacity,_zero_claim (0.00s)
+    --- PASS: TestEvaluate_Capacity/stored_exactly_at_capacity,_positive_claim (0.00s)
+    --- PASS: TestEvaluate_Capacity/claim_larger_than_whole_tank (0.00s)
+=== RUN   TestEvaluate_CapacityCheckPrecedesPeerRules
+--- PASS: TestEvaluate_CapacityCheckPrecedesPeerRules (0.00s)
+=== RUN   TestEvaluate_RobustScore
+--- PASS: TestEvaluate_RobustScore (0.00s)
+=== RUN   TestEvaluate_OutlierThresholdIsStrict
+=== RUN   TestEvaluate_OutlierThresholdIsStrict/just_below_threshold
+=== RUN   TestEvaluate_OutlierThresholdIsStrict/just_above_threshold
+--- PASS: TestEvaluate_OutlierThresholdIsStrict (0.00s)
+    --- PASS: TestEvaluate_OutlierThresholdIsStrict/just_below_threshold (0.00s)
+    --- PASS: TestEvaluate_OutlierThresholdIsStrict/just_above_threshold (0.00s)
+=== RUN   TestEvaluate_OutlierThresholdExactEquality
+=== RUN   TestEvaluate_OutlierThresholdExactEquality/Z_exactly_3.5_is_not_an_outlier
+=== RUN   TestEvaluate_OutlierThresholdExactEquality/Z_just_above_3.5_is_an_outlier
+--- PASS: TestEvaluate_OutlierThresholdExactEquality (0.00s)
+    --- PASS: TestEvaluate_OutlierThresholdExactEquality/Z_exactly_3.5_is_not_an_outlier (0.00s)
+    --- PASS: TestEvaluate_OutlierThresholdExactEquality/Z_just_above_3.5_is_an_outlier (0.00s)
+=== RUN   TestMedianSorted
+=== RUN   TestMedianSorted/0
+=== RUN   TestMedianSorted/1
+=== RUN   TestMedianSorted/2
+=== RUN   TestMedianSorted/3
+=== RUN   TestMedianSorted/4
+--- PASS: TestMedianSorted (0.00s)
+    --- PASS: TestMedianSorted/0 (0.00s)
+    --- PASS: TestMedianSorted/1 (0.00s)
+    --- PASS: TestMedianSorted/2 (0.00s)
+    --- PASS: TestMedianSorted/3 (0.00s)
+    --- PASS: TestMedianSorted/4 (0.00s)
+=== RUN   TestWindow
+=== RUN   TestWindow/bounded:_oldest_observation_is_evicted
+=== RUN   TestWindow/a_reading_older_than_everything_in_a_full_window_is_not_recorded
+=== RUN   TestWindow/same_device_updates_in_place
+=== RUN   TestWindow/an_older_reading_does_not_replace_a_newer_observation_of_the_same_device
+--- PASS: TestWindow (0.00s)
+    --- PASS: TestWindow/bounded:_oldest_observation_is_evicted (0.00s)
+    --- PASS: TestWindow/a_reading_older_than_everything_in_a_full_window_is_not_recorded (0.00s)
+    --- PASS: TestWindow/same_device_updates_in_place (0.00s)
+    --- PASS: TestWindow/an_older_reading_does_not_replace_a_newer_observation_of_the_same_device (0.00s)
+=== RUN   TestConfig
+=== RUN   TestConfig/defaults_match_the_specification
+=== RUN   TestConfig/zero_config_is_rejected
+=== RUN   TestConfig/invalid:_negative_alpha
+=== RUN   TestConfig/invalid:_NaN_beta
+=== RUN   TestConfig/invalid:_zero_min_peers
+=== RUN   TestConfig/invalid:_zero_peer_max_age
+=== RUN   TestConfig/invalid:_window_smaller_than_min_peers_+_1
+=== RUN   TestConfig/invalid:_zero_z_scale
+=== RUN   TestConfig/invalid:_zero_MAD_floor
+=== RUN   TestConfig/invalid:_zero_outlier_z
+=== RUN   TestConfig/invalid:_negative_rain_threshold
+=== RUN   TestConfig/invalid:_negative_coherence_abs
+=== RUN   TestConfig/invalid:_Inf_coherence_frac
+=== RUN   TestConfig/invalid:_negative_radar_dry
+=== RUN   TestConfig/invalid:_zero_escrow_ttl
+=== RUN   TestConfig/invalid:_zero_neighbor_min_cells
+=== RUN   TestConfig/invalid:_zero_neighbor_min_devices
+=== RUN   TestConfig/config_values_are_honoured
+--- PASS: TestConfig (0.00s)
+    --- PASS: TestConfig/defaults_match_the_specification (0.00s)
+    --- PASS: TestConfig/zero_config_is_rejected (0.00s)
+    --- PASS: TestConfig/invalid:_negative_alpha (0.00s)
+    --- PASS: TestConfig/invalid:_NaN_beta (0.00s)
+    --- PASS: TestConfig/invalid:_zero_min_peers (0.00s)
+    --- PASS: TestConfig/invalid:_zero_peer_max_age (0.00s)
+    --- PASS: TestConfig/invalid:_window_smaller_than_min_peers_+_1 (0.00s)
+    --- PASS: TestConfig/invalid:_zero_z_scale (0.00s)
+    --- PASS: TestConfig/invalid:_zero_MAD_floor (0.00s)
+    --- PASS: TestConfig/invalid:_zero_outlier_z (0.00s)
+    --- PASS: TestConfig/invalid:_negative_rain_threshold (0.00s)
+    --- PASS: TestConfig/invalid:_negative_coherence_abs (0.00s)
+    --- PASS: TestConfig/invalid:_Inf_coherence_frac (0.00s)
+    --- PASS: TestConfig/invalid:_negative_radar_dry (0.00s)
+    --- PASS: TestConfig/invalid:_zero_escrow_ttl (0.00s)
+    --- PASS: TestConfig/invalid:_zero_neighbor_min_cells (0.00s)
+    --- PASS: TestConfig/invalid:_zero_neighbor_min_devices (0.00s)
+    --- PASS: TestConfig/config_values_are_honoured (0.00s)
+=== RUN   ExampleVerifier_Evaluate
+--- PASS: ExampleVerifier_Evaluate (0.00s)
+PASS
+ok  	hydroledger-prototype/hydroledger/verifier	1.053s
+exit status: 0
