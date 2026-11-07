@@ -5,6 +5,84 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 6 — 2026-11-07 — Phase 5 frontend dashboard
+
+### What was done
+
+Implemented Phase 5 under allowed paths (`dashboard/`, `docs/demo.md`). Earlier
+phases were **read-only**.
+
+- **Frontend setup (`dashboard/`, React + Vite + TypeScript)**: maintainable
+  component architecture, responsive white/minimal/professional UI, Leaflet +
+  `react-leaflet` + `h3-js` for geospatial H3 rendering, accessible labels/
+  controls/tables.
+- **H3 map**: interactive polygons colored by `ACCEPT` (green),
+  `PROVISIONAL_ESCROW` (amber), `QUARANTINE` (red), with cell selection/popup
+  showing relevant telemetry context.
+- **Telemetry table**: device ID, timestamp, rainfall, radar rainfall, peer
+  consensus/count, decision, reason; filtering, sorting, pagination.
+- **Escrow panel**: escrow ID, device, cell, state, created/expiry/remaining
+  time (live countdown), corroboration status.
+- **Audit ledger viewer**: seq, event reference, prev/current hash, timestamp,
+  checkpoint signature status; UI action for ledger integrity verification
+  (explicitly labeled simulated/structural in-browser check; authoritative
+  verification is Phase 4 Go).
+- **Analytics**: total/accepted/provisional/quarantined readings, escrow
+  resolution rate, active devices, spatial cell distribution; clearly
+  distinguishes SIMULATED fixture data from API data.
+- **API integration**: `VITE_API_BASE` client with fallback to mock fixtures
+  when endpoints are unavailable. Missing endpoints recorded under REQUESTED
+  CHANGES; no backend functionality invented.
+- **Demonstration mode**: 6 scripted scenarios (normal agreement, isolated spike
+  quarantine, radar-dry/coherent-peer escrow, later radar confirms, escrow
+  expires/quarantined, cross-cell collusion known limitation). All simulated
+  data visibly labeled **SIMULATED**.
+- **Tests**: Vitest + React Testing Library + jsdom — component/app tests, API
+  fallback/integration behavior, map rendering (mocked Leaflet), escrow display,
+  ledger verification UI, scenario coverage. `dashboard/README.md` and
+  `docs/demo.md` added.
+
+### REQUESTED CHANGES (missing backend endpoints)
+
+Phase 3 service currently exposes: `POST /telemetry/readings`,
+`GET /telemetry/readings/{id}`, `GET /escrows/{id}`,
+`GET /cells/{h3_index}/status`. The dashboard requires read/list/aggregate
+endpoints not yet available; mock fixtures are used temporarily:
+
+- `GET /telemetry/readings` (or paginated/filterable query) — telemetry table.
+- `GET /escrows` (or filterable list) — escrow panel.
+- `GET /cells` or spatial summary endpoint — H3 map states/aggregates.
+- `GET /ledger/entries` and `GET /ledger/checkpoints` (or equivalent) — ledger
+  viewer; optional `POST /ledger/verify` for authoritative server-side
+  verification.
+- `GET /analytics/summary` (or composable aggregate endpoints) — dashboard
+  analytics.
+- CORS/auth/config support for browser clients if dashboard is hosted
+  separately from API.
+
+### Evidence
+
+```text
+cd dashboard && npm test
+-> 2 test files, 10 tests passed
+
+cd dashboard && npm run build
+-> tsc -b && vite build succeeded (client bundle built)
+```
+
+Node v24.21.0 / npm 11.19.0. Build/test ran on host; no WDAC block encountered
+for Node/Vite/Vitest in this session.
+
+### Limitations
+
+- List/aggregate/ledger data is SIMULATED when backend endpoints are missing.
+- In-browser ledger integrity check is structural only; authoritative SHA-256/
+  Ed25519 verification is in Phase 4 Go `ledger/`.
+- Map tile layer uses public OpenStreetMap tiles in demo mode; production
+  deployments should review tile/provider terms and availability.
+
+---
+
 ## Entry 5 — 2026-11-07 — Phase 4 audit ledger and water allocation
 
 ### What was done
