@@ -33,25 +33,25 @@ import (
 )
 
 const (
-	SchemaV1      = "hydroledger.ledger.entry.v1"
-	CheckpointV1  = "hydroledger.ledger.checkpoint.v1"
-	GenesisPrev   = "0000000000000000000000000000000000000000000000000000000000000000"
-	HashHexLen    = 64
+	SchemaV1     = "hydroledger.ledger.entry.v1"
+	CheckpointV1 = "hydroledger.ledger.checkpoint.v1"
+	GenesisPrev  = "0000000000000000000000000000000000000000000000000000000000000000"
+	HashHexLen   = 64
 )
 
 var (
-	ErrEmptyEventRef      = errors.New("ledger: event reference must not be empty")
-	ErrEventRefControl    = errors.New("ledger: event reference must not contain newline/control line breaks")
-	ErrSequenceGap        = errors.New("ledger: sequence number gap or rewind")
-	ErrPrevHashMismatch   = errors.New("ledger: previous hash mismatch")
-	ErrHashMismatch       = errors.New("ledger: entry hash mismatch")
-	ErrEmptyChain         = errors.New("ledger: chain is empty")
-	ErrInvalidCheckpoint  = errors.New("ledger: invalid checkpoint")
-	ErrCheckpointSig      = errors.New("ledger: checkpoint signature invalid")
-	ErrCheckpointChain    = errors.New("ledger: checkpoint does not match chain head")
-	ErrNilSigner          = errors.New("ledger: nil signer")
-	ErrNilPublicKey       = errors.New("ledger: nil public key")
-	ErrInterval           = errors.New("ledger: checkpoint interval must be > 0")
+	ErrEmptyEventRef     = errors.New("ledger: event reference must not be empty")
+	ErrEventRefControl   = errors.New("ledger: event reference must not contain newline/control line breaks")
+	ErrSequenceGap       = errors.New("ledger: sequence number gap or rewind")
+	ErrPrevHashMismatch  = errors.New("ledger: previous hash mismatch")
+	ErrHashMismatch      = errors.New("ledger: entry hash mismatch")
+	ErrEmptyChain        = errors.New("ledger: chain is empty")
+	ErrInvalidCheckpoint = errors.New("ledger: invalid checkpoint")
+	ErrCheckpointSig     = errors.New("ledger: checkpoint signature invalid")
+	ErrCheckpointChain   = errors.New("ledger: checkpoint does not match chain head")
+	ErrNilSigner         = errors.New("ledger: nil signer")
+	ErrNilPublicKey      = errors.New("ledger: nil public key")
+	ErrInterval          = errors.New("ledger: checkpoint interval must be > 0")
 )
 
 // Entry is one append-only ledger record.
@@ -236,12 +236,12 @@ func (l *Ledger) ReplaceEntriesForTest(entries []Entry) {
 
 // Checkpoint is an Ed25519-signed attestation to a chain head.
 type Checkpoint struct {
-	Schema    string `json:"schema"`
-	Seq       uint64 `json:"seq"`
-	HeadHash  string `json:"head_hash"`
+	Schema    string    `json:"schema"`
+	Seq       uint64    `json:"seq"`
+	HeadHash  string    `json:"head_hash"`
 	Timestamp time.Time `json:"timestamp"`
-	Signature []byte `json:"signature"`
-	KeyID     string `json:"key_id,omitempty"`
+	Signature []byte    `json:"signature"`
+	KeyID     string    `json:"key_id,omitempty"`
 }
 
 // CheckpointMessage returns the canonical bytes signed/verified for a checkpoint.

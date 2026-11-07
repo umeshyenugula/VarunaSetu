@@ -5,6 +5,63 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 7 — 2026-11-07 — Repository integration audit & stabilization pass
+
+### What was done
+
+Performed a cross-repo integration audit and implemented targeted fixes/wiring
+without modifying earlier verifier/identity/spatial/ledger core logic and
+without removing working functionality.
+
+- **Audit/baseline**: created `docs/INTEGRATION_AUDIT.md`,
+  `docs/ERROR_LOG.md`, `docs/ARCHITECTURE.md`, `docs/SETUP.md`,
+  `docs/TESTING.md`; updated `README.md`.
+- **Go quality**: `gofmt -w` on reported files; `go build` passes for
+  `./cmd/server ./service ./ledger ./hydroledger/...` (Docker). Core/ledger
+  tests and race tests pass in Docker: `ok verifier`, `identity`, `spatial`,
+  `ledger`.
+- **Service integration (additive, existing behavior preserved)**: added thin
+  dashboard-facing read endpoints `GET /telemetry/readings` (list),
+  `GET /escrows`, `GET /cells` summary, `GET /ledger/entries`,
+  `GET /analytics/summary`, `GET /healthz`; optional CORS (`CORSAllowOrigin`);
+  repo list/aggregate queries in `service/repository.go`; view models in
+  `service/models.go`. Existing signed ingest, ID-based reads, escrow logic, and
+  middleware behavior retained.
+- **Runtime/ops**: added `cmd/server/main.go` (env config, pgx driver, health
+  flag), `Dockerfile`, `docker-compose.yml` (PostGIS + API + optional UI
+  profile), `.env.example`. `docker compose config --quiet` validated.
+- **Dashboard**: API client already supported real endpoints/fallback; fixed
+  Phase 5 commit gap by committing map deps + vitest TS types
+  (`dashboard/package.json`, lockfile, `tsconfig.app.json`). Dashboard tests (10)
+  and production build pass.
+- **Python**: `sim` unittest suite 70 PASS (host); `alloc` 3 PASS (Docker +
+  NetworkX).
+- **WDAC handling**: where host Windows Application Control blocked rebuilt Go
+  test binaries, used Dockerized Go/Python execution for evidence.
+
+### REQUESTED CHANGES / open integration items
+
+- **Service DB integration tests**: run `HYDROLEDGER_TEST_DATABASE_URL=... go test ./service -count=1` (disposable PostGIS) after additive API changes; not executed in this pass.
+- **Full compose runtime smoke**: `docker compose up --build` + health/readiness + UI profile (config validated; runtime smoke not executed).
+- **Live signed E2E scenarios A–F**: verifier/ledger components tested; full HTTP+DB+enrolled-device flows remain to execute in an integrated harness.
+- **Ledger event wiring**: migration 002 tables exist; service decisions/events not yet appended to audit ledger (design carefully; no competing source of truth).
+- **Identity enrollment for runtime server**: `cmd/server` uses in-memory registry (dev/demo). Production needs durable enrollment/key management.
+- **Neighbor-cell durable corroboration** and **allocation live API/UI wiring**: documented/open as appropriate.
+
+### Evidence (actual)
+
+```text
+docker run --rm -v <repo>:/src -w /src golang:1.26.8 go test ./hydroledger/... ./ledger/... -count=1  => PASS
+docker run --rm -v <repo>:/src -w /src golang:1.26.8 go test -race ./hydroledger/... ./ledger/... -count=1 => PASS
+docker run --rm -v <repo>:/src -w /src golang:1.26.8 go build ./cmd/server ./service ./ledger ./hydroledger/... => BUILD_OK
+python -m unittest discover -s sim/tests -t . -v => 70 OK
+docker python:3.14-slim + networkx: unittest discover -t . -s alloc -p 'test*.py' -v => 3 OK
+cd dashboard && npm test => 10 PASS; npm run build => PASS
+docker compose config --quiet => valid
+```
+
+---
+
 ## Entry 6 — 2026-11-07 — Phase 5 frontend dashboard
 
 ### What was done

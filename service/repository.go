@@ -326,3 +326,177 @@ func (r *Repository) ExpireEscrows(ctx context.Context, now time.Time) error {
 	}
 	return tx.Commit()
 }
+
+// ListReadings returns dashboard-facing reading projections (additive read API).
+func (r *Repository) ListReadings(ctx context.Context, limit int) ([]ReadingView, error) {
+	if err := r.ensureDB(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT tr.id, tr.device_id, tr.event_time, tr.h3_index,
+		       tr.claimed_litres / NULLIF(tr.roof_area_m2 * tr.runoff_coeff, 0),
+		       tr.radar_mm, vd.peer_count, vd.peer_median_mm, vd.state, vd.reason
+		FROM telemetry_reading tr
+		JOIN verification_decision vd ON vd.reading_id = tr.id
+		ORDER BY tr.event_time DESC, tr.id DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list readings: %w", err)
+	}
+	defer rows.Close()
+	var out []ReadingView
+	for rows.Next() {
+		var v ReadingView
+		var rain sql.NullFloat64
+		var peerMedian sql.NullFloat64
+		if err := rows.Scan(&v.ID, &v.DeviceID, &v.Timestamp, &v.H3Index, &rain, &v.RadarRainfallMM, &v.PeerCount, &peerMedian, &v.Decision, &v.Reason); err != nil {
+			return nil, err
+		}
+		if rain.Valid {
+			v.RainfallMM = rain.Float64
+		}
+		if peerMedian.Valid && v.PeerCount > 0 {
+			pm := peerMedian.Float64
+			v.PeerConsensusMM = &pm
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// ListEscrows returns dashboard-facing escrow projections (additive read API).
+func (r *Repository) ListEscrows(ctx context.Context, limit int) ([]EscrowView, error) {
+	if err := r.ensureDB(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT er.id, tr.device_id, tr.h3_index, er.state, er.created_at, er.expires_at, er.corroborated_at
+		FROM escrow_record er
+		JOIN telemetry_reading tr ON tr.id = er.reading_id
+		ORDER BY er.created_at DESC, er.id DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list escrows: %w", err)
+	}
+	defer rows.Close()
+	var out []EscrowView
+	for rows.Next() {
+		var v EscrowView
+		if err := rows.Scan(&v.ID, &v.DeviceID, &v.H3Index, &v.State, &v.CreatedAt, &v.ExpiresAt, &v.CorroboratedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// ListCellSummaries returns recent per-cell decision summaries (additive read API).
+func (r *Repository) ListCellSummaries(ctx context.Context, limit int) ([]CellSummary, error) {
+	if err := r.ensureDB(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT h3_index, state, readings FROM (
+			SELECT tr.h3_index, vd.state, COUNT(*)::int AS readings,
+			       ROW_NUMBER() OVER (PARTITION BY tr.h3_index ORDER BY
+			         CASE vd.state WHEN 'QUARANTINE' THEN 3 WHEN 'PROVISIONAL_ESCROW' THEN 2 WHEN 'ACCEPT' THEN 1 ELSE 0 END DESC,
+			         COUNT(*) DESC) AS rn
+			FROM telemetry_reading tr
+			JOIN verification_decision vd ON vd.reading_id = tr.id
+			GROUP BY tr.h3_index, vd.state
+		) s WHERE rn = 1
+		ORDER BY readings DESC, h3_index
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list cell summaries: %w", err)
+	}
+	defer rows.Close()
+	var out []CellSummary
+	for rows.Next() {
+		var v CellSummary
+		if err := rows.Scan(&v.H3Index, &v.State, &v.Readings); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// Analytics computes aggregate metrics from persisted readings/escrows.
+func (r *Repository) Analytics(ctx context.Context) (AnalyticsSummary, error) {
+	if err := r.ensureDB(); err != nil {
+		return AnalyticsSummary{}, err
+	}
+	var a AnalyticsSummary
+	a.Source = "database"
+	err := r.DB.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE vd.state='ACCEPT')::int,
+			COUNT(*) FILTER (WHERE vd.state='PROVISIONAL_ESCROW')::int,
+			COUNT(*) FILTER (WHERE vd.state='QUARANTINE')::int,
+			COUNT(DISTINCT tr.device_id)::int
+		FROM telemetry_reading tr
+		JOIN verification_decision vd ON vd.reading_id = tr.id`).Scan(
+		&a.TotalReadings, &a.Accepted, &a.Provisional, &a.Quarantined, &a.ActiveDevices)
+	if err != nil {
+		return AnalyticsSummary{}, fmt.Errorf("analytics readings: %w", err)
+	}
+	var totalEscrows, resolvedEscrows int
+	err = r.DB.QueryRowContext(ctx, `SELECT COUNT(*)::int, COUNT(*) FILTER (WHERE state <> 'PENDING')::int FROM escrow_record`).Scan(&totalEscrows, &resolvedEscrows)
+	if err != nil {
+		return AnalyticsSummary{}, fmt.Errorf("analytics escrows: %w", err)
+	}
+	if totalEscrows > 0 {
+		rate := float64(resolvedEscrows) / float64(totalEscrows)
+		a.EscrowResolutionRate = &rate
+	}
+	return a, nil
+}
+
+// ListLedgerEntries returns audit ledger projections when migration 002 tables exist.
+func (r *Repository) ListLedgerEntries(ctx context.Context, limit int) ([]LedgerEntryView, error) {
+	if err := r.ensureDB(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT e.seq, e.event_ref, e.prev_hash, e.entry_hash, e.event_time,
+		       CASE WHEN c.id IS NOT NULL THEN 'present' ELSE 'none' END AS checkpoint_status,
+		       c.seq
+		FROM audit_ledger_entry e
+		LEFT JOIN LATERAL (
+			SELECT id, seq FROM audit_ledger_checkpoint c WHERE c.seq = e.seq ORDER BY c.created_at DESC LIMIT 1
+		) c ON true
+		ORDER BY e.seq DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list ledger entries: %w", err)
+	}
+	defer rows.Close()
+	var out []LedgerEntryView
+	for rows.Next() {
+		var v LedgerEntryView
+		var cpSeq sql.NullInt64
+		if err := rows.Scan(&v.Seq, &v.EventRef, &v.PrevHash, &v.Hash, &v.Timestamp, &v.CheckpointSignatureStatus, &cpSeq); err != nil {
+			return nil, err
+		}
+		if cpSeq.Valid {
+			s := cpSeq.Int64
+			v.CheckpointSeq = &s
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

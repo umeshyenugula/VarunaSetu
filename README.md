@@ -1,54 +1,53 @@
-# HydroLedger verifier (prototype)
+# VarunaSetu (HydroLedger prototype)
 
-A Go library that classifies rainwater-harvest readings as `ACCEPT`,
-`PROVISIONAL_ESCROW` or `QUARANTINE` by checking each claim against a
-radar-derived physical bound and against recent readings from other devices in
-the same cell. It was rebuilt from a written specification; there is no earlier
-code.
+VarunaSetu is a physics-informed, spatially aware urban water intelligence prototype. It evaluates rooftop rainwater harvesting telemetry using physical/radar constraints, spatial peer consensus (H3 context), escrow for conflicts, cryptographic identity primitives, durable backend persistence, audit-ledger primitives, allocation modeling, and a React dashboard.
 
-**Status: prototype.** It has not been reviewed for security, offers no
-protection against Sybil or coordinated reporting (a test documents one such
-case), and keeps all state in memory. Read `HANDOFF.md` before relying on any
-behaviour the specification did not spell out.
+> **Status:** integrated prototype/research codebase. Not production-ready. No Sybil-proof or real-world water-savings/flood-reduction claims.
 
-## Layout
+## Repository map
 
-```
-hydroledger/verifier/   the package (code, table-driven tests, benchmarks, example)
-CONTRACTS.md            public API, states, reason codes, defaults
-HANDOFF.md              handoff log: assumptions, known limitations, next steps
-docs/baseline_results.txt   raw test and benchmark output from one machine
-```
+| Area | Path | Status |
+|---|---|---|
+| Go verifier (core) | `hydroledger/verifier/` | Implemented, tested |
+| Spatial / identity | `hydroledger/verifier/spatial/`, `hydroledger/verifier/identity/` | Implemented, tested |
+| Durable service + API | `service/`, `cmd/server/`, `migrations/` | Implemented core ingest/escrow/read APIs; DB integration tests require PostGIS |
+| Audit ledger | `ledger/`, `migrations/002_ledger.sql` | Implemented/tested library; service event wiring pending |
+| Allocation (research) | `alloc/` | Implemented/tested (NetworkX) |
+| Simulation/replay (research) | `sim/` | Implemented/tested Python harness |
+| Dashboard | `dashboard/`, `docs/demo.md` | Implemented/tested; uses live API when available, labeled **SIMULATED** fixtures otherwise |
+| Ops | `Dockerfile`, `docker-compose.yml`, `.env.example` | Config validated; runtime smoke recommended |
 
-Standard library only; module `hydroledger-prototype`, Go 1.24 directive.
+## Quick start
 
-## Use
-
-```go
-v, err := verifier.New(verifier.DefaultConfig())
-if err != nil { /* invalid config */ }
-
-v.SetNeighbors("cell-a", []string{"cell-b", "cell-c"}) // caller-supplied, no H3
-
-d := v.Evaluate(reading)          // d.State, d.Reason
-// d.State == verifier.StateProvisionalEscrow means: held, not final.
-
-// Call periodically; `now` must be on the same time base as Reading.Timestamp.
-for _, r := range v.ResolveEscrows(now) {
-    // r.State is ACCEPT (ESCROW_CORROBORATED) or QUARANTINE (ESCROW_EXPIRED_UNCORROBORATED)
-}
+```bash
+cp .env.example .env
+docker compose up --build
+# optional dashboard: docker compose --profile ui up --build
 ```
 
-`go test ./hydroledger/verifier -run Example` runs a compiled version of the
-first call.
+See [`docs/SETUP.md`](docs/SETUP.md), [`docs/TESTING.md`](docs/TESTING.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/INTEGRATION_AUDIT.md`](docs/INTEGRATION_AUDIT.md), [`docs/ERROR_LOG.md`](docs/ERROR_LOG.md), [`HANDOFF.md`](HANDOFF.md), and [`CONTRACTS.md`](CONTRACTS.md).
 
-## Test and benchmark
+## Core API (service)
 
+- `POST /telemetry/readings` — signed telemetry ingest (identity + durable idempotency)
+- `GET /telemetry/readings`, `GET /telemetry/readings/{id}`
+- `GET /escrows`, `GET /escrows/{id}`
+- `GET /cells`, `GET /cells/{h3_index}/status`
+- `GET /ledger/entries` (requires migration 002 data/tables)
+- `GET /analytics/summary`, `GET /healthz`
+
+`cmd/server` uses an in-memory identity registry for dev/demo; production requires durable enrollment/key management.
+
+## Verification
+
+```bash
+# Go core/ledger (Docker, WDAC-safe)
+docker run --rm -v "$PWD:/src" -w /src golang:1.26.8 go test -race ./hydroledger/... ./ledger/... -count=1
+# Dashboard
+cd dashboard && npm test && npm run build
+# Simulation / allocation
+python -m unittest discover -s sim/tests -t . -v
+docker run --rm -v "$PWD:/src" -w /src python:3.14-slim sh -lc "pip install -q networkx && python -m unittest discover -t . -s alloc -p 'test*.py' -v"
 ```
-go test ./... -race
-go test ./... -run '^$' -bench . -benchmem
-```
 
-`docs/baseline_results.txt` holds the output of both on the machine named in its
-header, with Go version and CPU model. Benchmark figures depend on the machine;
-none are quoted in these documents.
+Service DB tests: `HYDROLEDGER_TEST_DATABASE_URL=... go test ./service -count=1` (disposable PostGIS).

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,8 @@ type Config struct {
 	RequestTimeout      time.Duration
 	EscrowSweepInterval time.Duration
 	Now                 func() time.Time
+	// CORSAllowOrigin, if set, enables simple CORS for browser dashboard reads (dev/integration).
+	CORSAllowOrigin string
 }
 
 type Server struct {
@@ -78,10 +81,21 @@ func (s *Server) now() time.Time { return s.cfg.Now() }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("POST /telemetry/readings", s.signedTelemetryMiddleware(http.HandlerFunc(s.postReading)))
+	mux.HandleFunc("GET /telemetry/readings", s.listReadings)
 	mux.HandleFunc("GET /telemetry/readings/{id}", s.getReading)
+	mux.HandleFunc("GET /escrows", s.listEscrows)
 	mux.HandleFunc("GET /escrows/{id}", s.getEscrow)
+	mux.HandleFunc("GET /cells", s.listCells)
 	mux.HandleFunc("GET /cells/{h3_index}/status", s.getCellStatus)
-	return requestMiddleware(s.cfg.RequestTimeout, s.cfg.Logger, mux)
+	mux.HandleFunc("GET /ledger/entries", s.listLedgerEntries)
+	mux.HandleFunc("GET /analytics/summary", s.getAnalytics)
+	mux.HandleFunc("GET /healthz", s.healthz)
+	mux.HandleFunc("OPTIONS /", s.optionsOK)
+	var h http.Handler = mux
+	if s.cfg.CORSAllowOrigin != "" {
+		h = corsMiddleware(s.cfg.CORSAllowOrigin, h)
+	}
+	return requestMiddleware(s.cfg.RequestTimeout, s.cfg.Logger, h)
 }
 
 func (s *Server) StartExpiryWorker(ctx context.Context) {
@@ -419,4 +433,113 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func queryLimit(r *http.Request) int {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 500 {
+		return 100
+	}
+	return limit
+}
+
+func (s *Server) listReadings(w http.ResponseWriter, r *http.Request) {
+	out, err := s.cfg.Repository.ListReadings(r.Context(), queryLimit(r))
+	if err != nil {
+		if isContextErr(w, err) {
+			return
+		}
+		s.cfg.Logger.Error("list readings failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list readings")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) listEscrows(w http.ResponseWriter, r *http.Request) {
+	out, err := s.cfg.Repository.ListEscrows(r.Context(), queryLimit(r))
+	if err != nil {
+		if isContextErr(w, err) {
+			return
+		}
+		s.cfg.Logger.Error("list escrows failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list escrows")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) listCells(w http.ResponseWriter, r *http.Request) {
+	out, err := s.cfg.Repository.ListCellSummaries(r.Context(), queryLimit(r))
+	if err != nil {
+		if isContextErr(w, err) {
+			return
+		}
+		s.cfg.Logger.Error("list cells failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list cells")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) listLedgerEntries(w http.ResponseWriter, r *http.Request) {
+	out, err := s.cfg.Repository.ListLedgerEntries(r.Context(), queryLimit(r))
+	if err != nil {
+		if isContextErr(w, err) {
+			return
+		}
+		// migration 002 may not be applied; dashboard falls back to fixtures
+		writeError(w, http.StatusServiceUnavailable, "ledger entries unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) getAnalytics(w http.ResponseWriter, r *http.Request) {
+	out, err := s.cfg.Repository.Analytics(r.Context())
+	if err != nil {
+		if isContextErr(w, err) {
+			return
+		}
+		s.cfg.Logger.Error("analytics failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not compute analytics")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
+	if err := s.cfg.Repository.DB.PingContext(r.Context()); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "database unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) optionsOK(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func isContextErr(w http.ResponseWriter, err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		writeError(w, http.StatusGatewayTimeout, "request timed out")
+		return true
+	}
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+	return false
+}
+
+func corsMiddleware(allowOrigin string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
