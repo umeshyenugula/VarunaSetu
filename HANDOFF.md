@@ -5,6 +5,197 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 2 — 2026-11-07 — Phase 0B Python simulation and ablation engine
+
+### What was done
+
+Built the Phase 0B research harness from scratch under `sim/`:
+
+- `sim/config.py` is the single source of truth: 100,000 events per seed,
+  seeds 1-10, seven scenarios, all generator distributions, and the four
+  methods' thresholds.
+- `sim/ablation_experiment.py` generates deterministic synthetic telemetry,
+  evaluates static threshold, physics-only, peer-only (median/MAD robust Z)
+  and hybrid (physics + peers) in one chronological pass, and writes every
+  required table.
+- `sim/tests/test_ablation.py` contains 28 offline tests: config contract,
+  determinism, event validity, fraud proportions, metric arithmetic, method
+  boundaries, the known peer-majority limitation, and end-to-end CSV/Markdown
+  generation.
+- `sim/run_all.sh` runs the tests first and then the full ablation.
+- `sim/requirements.txt` records that only the Python standard library is
+  used; there are no third-party packages to pin.
+
+Outputs in `docs/results/`:
+
+| File | Contents |
+|---|---|
+| `METHOD.md` | Generated methodology, distributions, scenario definitions, metrics, latest result tables, limitations |
+| `overall_results.csv` | Mean and sample std across seeds, plus pooled confusion counts |
+| `scenario_results.csv` | Per-scenario mean/std and pooled counts |
+| `confusion_matrices.csv` | Per-scenario/seed, pooled scenario, per-seed overall, and pooled overall matrices |
+
+### Commands and evidence
+
+Executed on this machine:
+
+```text
+python -m unittest discover -s sim/tests -t . -v
+-> Ran 28 tests ... OK
+
+bash sim/run_all.sh          (Git Bash; Python 3.12.10)
+-> 28 tests OK
+-> full run: 100,000 events x 10 seeds x 7 scenarios = 7,000,000 events
+-> wrote docs/results/{METHOD.md,overall_results.csv,scenario_results.csv,confusion_matrices.csv}
+```
+
+The earlier Phase 0A suite was also run before this phase:
+
+```text
+go test ./... -count=1
+-> ok hydroledger-prototype/hydroledger/verifier 1.019s
+```
+
+No Go code, Go defaults, Go reason codes or Go public interfaces were
+modified. `CONTRACTS.md` was not changed because no Go interface was added.
+
+### Actual results from this run
+
+Overall (pooled across the seven scenarios within each seed, then averaged;
+positive class = fraudulent reading):
+
+| Method | Precision | Recall | F1 | FPR |
+|---|---:|---:|---:|---:|
+| Static threshold | 0.730538 | 0.165091 | 0.269232 | 0.026826 |
+| Physics-only | 0.987049 | 0.765345 | 0.862170 | 0.004398 |
+| Peer-only | 0.999994 | 0.474728 | 0.643815 | 0.000001 |
+| Hybrid | 0.988550 | 0.871699 | 0.926451 | 0.004422 |
+
+Key scenario observations:
+
+- Peer-only is near-perfect on normal rainfall, microburst and isolated-spike
+  scenarios (F1 0.9994, 0.9991, 0.9997) and catches 97.1% of the 40%
+  coordinated compromise (F1 0.9855).
+- Peer-only fails when the fraudulent readings are a coherent majority:
+  coordinated 60% recall is 4.2% (F1 0.0810). Median/MAD cannot detect a
+  majority that defines the median.
+- Peer-only is partial at the two 50%-fraud scenarios: dry-weather spoofing
+  F1 0.6393 and radar-bounded spoofing F1 0.6237.
+- Hybrid is stronger overall because the radar bound independently rejects
+  the dry-radar coordinated fabrications (F1 0.999994 at 40% compromise and
+  0.999976 at 60%); it matches peer-only at radar-bounded spoofing (F1 0.6237),
+  where the radar bound is deliberately not discriminating.
+- Peer-only has higher precision and a lower false-positive rate than hybrid
+  in this run (0.999994 vs 0.988550 precision; 0.000001 vs 0.004422 FPR),
+  consistent with the qualitative historical claim, but its overall F1 is
+  lower because the scenario mix contains high-prevalence and peer-majority
+  stress cases.
+
+These numbers do **not** reproduce the previously quoted historical headline
+table (static 25.45%, physics 63.63%, peer 95.36%, hybrid 96.42%). The
+generator, priors and scenario mix are different from whatever produced that
+table, and no parameter was tuned to close the gap. The historical figures
+must not be attributed to this code. In particular, physics-only is much
+higher here because the coordinated scenarios use a dry radar, so a 9 mm
+fabricated claim is physically impossible; peer-only is much lower because
+the 60% and 50%-fraud scenarios are deliberately adversarial.
+
+### ASSUMPTIONS (Phase 0B)
+
+- **B1 Positive class.** A reading is positive when `fraudulent=True`:
+  the claim deliberately overstates the synthetic true depth. Honest noise
+  and under-claims are negative. All precision/recall/F1/FPR figures are for
+  fraud detection, not water-resource estimation.
+- **B2 No tuning.** Generator and method parameters were fixed before
+  evaluation; no parameter search was run on the evaluation seeds. The
+  scenario mix is a deliberate stress mix, not a real-world prevalence.
+- **B3 Priors.** Scenarios 1-5 use exact fraud shares 2%, 3%, 8%, 50%, 50%.
+  Coordinated scenarios use 40% and 60% compromised devices per cell (13/32
+  and 19/32 after rounding); the realised event share is close to, not
+  exactly, the nominal value.
+- **B4 Static baseline.** Fixed threshold 10.0 mm effective depth. The
+  specification did not define the static baseline's threshold; this is an
+  explicit choice, not a Go verifier default.
+- **B5 Peer-only.** Uses the specified median/MAD robust Z with `Z > 3.5`
+  and `R_obs > median`. With fewer than four peers it accepts; it never uses
+  radar. This is the ablation definition, not a claim that peer-only is a
+  complete verifier.
+- **B6 Hybrid binary mapping.** Hybrid follows the Go rule order (outlier,
+  dry-radar/rainy-coherent-peer conflict, physical bound) but maps
+  `PROVISIONAL_ESCROW` to "not accepted" because Phase 0B does not model TTL
+  resolution. This is conservative and may increase hybrid false positives.
+- **B7 Capacity.** Tank capacity is 100,000 L and every generated event fits;
+  capacity validation is intentionally non-binding and not measured.
+- **B8 Radar.** `RadarMM` is supplied per reading, mirroring the current Go
+  `Reading`. The simulation does not authenticate radar or devices.
+- **B9 World.** 16 cells, 32 devices per cell, 24-hour horizon, uniform event
+  timestamps, one latest observation per device in a 10-minute peer window.
+  Ordinary rain is a sum of broad Gaussian storm pulses; microbursts are
+  short intense pulses with radar under-catch.
+- **B10 Statistics.** Mean and sample standard deviation (`n-1`) across the
+  ten seeds. Per-scenario and overall metrics are computed per seed and then
+  averaged; they are not the F1 of averaged counts. A zero denominator yields
+  0.0.
+- **B11 Determinism.** Integer seeds (`seed * 1000 + scenario_index`) are
+  passed to `random.Random`; Python's randomized `hash` is never used.
+- **B12 Runtime.** `run_all.sh` was exercised with Git Bash and CPython
+  3.12.10; the same tests and full experiment also passed with CPython
+  3.14.0. No network access is used.
+
+### Known limitations
+
+- **L1 Synthetic only.** The results describe this generator. They are not
+  field accuracy, not Hyderabad rainfall validation, and not flood
+  prediction.
+- **L2 Not a Go integration test.** The peer window and decision order are
+  reimplemented in Python and mirror the documented Go rules; the Python
+  engine does not call the Go package.
+- **L3 Escrow is binary.** `PROVISIONAL_ESCROW` is counted as rejected; no
+  TTL, radar-later, or neighbor-cell corroboration is simulated.
+- **L4 Peer-majority failure.** At 60% coordinated compromise, peer-only
+  recall is 4.2%. This is the expected limitation of median/MAD under a
+  coherent majority and is asserted in
+  `test_known_peer_majority_limitation`.
+- **L5 High-prevalence stress mix.** The 50% dry/radar-bounded priors and the
+  40/60 coordinated scenarios dominate the pooled overall metrics. They are
+  not estimates of real-world fraud prevalence.
+- **L6 No identity or Sybil model.** Compromise is a fixed fraction of
+  `DeviceID` strings; there is no authentication, key material, or Sybil
+  cost. `RadarMM` is taken from the reading.
+- **L7 Capacity and malformed inputs.** Capacity is non-binding; no invalid
+  input stream is generated. Both are covered by the Go tests, not this
+  ablation.
+- **L8 Static threshold choice.** The 10.0 mm baseline is a design choice and
+  materially affects the static row.
+
+### Open questions
+
+1. Should the coordinated scenarios also spoof radar, so the radar bound does
+   not independently catch the fabrication? That would isolate peer
+   consensus further and would need a new documented scenario, not a silent
+   change to the existing one.
+2. Should the overall table use a realistic weighting of scenarios instead of
+   equal event counts? Current overall numbers are an adversarial stress
+   aggregate.
+3. Should hybrid model escrow TTL and later corroboration instead of mapping
+   provisional to rejected?
+4. Should peer-only use a different robust estimator (for example a lower
+   quantile) to survive a 60% coherent majority? That would be a new method,
+   not a tweak to the specified median/MAD method.
+
+### Suggested next steps (not done)
+
+- Decide the open questions above before Phase 1 comparisons.
+- Add a scenario where coordinated attackers also spoof radar, under a new
+  key, and report it separately.
+- Add an integration test that feeds the same synthetic events through the
+  Go verifier via a small exported test harness, if cross-language fixtures
+  are wanted.
+- Add confidence intervals or a bootstrap over seeds if the results are used
+  in a paper; the current output reports mean ± sample std only.
+
+---
+
 ## Entry 1 — 2026-11-07 — Initial rebuild from the written specification
 
 ### What was done

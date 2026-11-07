@@ -1,0 +1,7 @@
+# HydroLedger Phase 0B — simulation dependencies
+#
+# No third-party packages are required. The experiment, tests and CSV output
+# use the Python standard library only, so there is nothing to pin.
+#
+# Tested with CPython 3.12.10 and 3.14.0 on Windows 11 (amd64).
+# Intended minimum: CPython 3.10 (uses only stable standard-library APIs).
