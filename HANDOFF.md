@@ -5,6 +5,289 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 3 — 2026-11-07 — Phase 1 H3 spatial indexing and device identity
+
+### What was done
+
+Phase 1 adds two packages under the existing module layout. `verifier.go` and
+every Phase 0 test were left untouched.
+
+- `hydroledger/verifier/spatial` (**IMPLEMENTED**): pinned pure-Go H3 binding,
+  coordinate-to-cell conversion at a configurable resolution, k-ring neighbour
+  lookup (default k = 1), canonical cell-id validation, and a small adapter
+  that calls `SetNeighbors`. Known-coordinate tests pin cells at resolutions
+  7–11 and the exact resolution-9 k=1 neighbour set.
+- `hydroledger/verifier/identity` (**IMPLEMENTED**): Ed25519 key pairs, signer,
+  canonical signed telemetry envelope, stateless signature verification,
+  in-memory enrollment registry, revocation list, nonce/timestamp replay
+  protection with an explicit time window, and a full `Verifier.Verify` path.
+- `hydroledger/verifier/spatial/README.md` documents how H3 resolution changes
+  cell area and expected peer density.
+
+### Package locations (ASSUMPTION C1)
+
+The phase prompt names `verifier/spatial/` and `verifier/identity/`. The module
+layout recorded in Entry 1/A1 is `hydroledger/verifier`, so the new packages are
+`hydroledger/verifier/spatial` and `hydroledger/verifier/identity`. Creating a
+second top-level `verifier/` tree would split one logical package family across
+two import paths.
+
+### H3 dependency (ASSUMPTION C2)
+
+Pinned in `go.mod`:
+
+```
+github.com/uber/h3-go/v4 v4.5.1-0.20261104181000-32ae003dbaa6
+```
+
+Reason for the dependency: real H3 indexing needs a maintained H3
+implementation; re-implementing H3 was out of scope. Reason for the exact
+version: the tagged `v4.5.0` of this module is a cgo binding, while this machine
+builds with `CGO_ENABLED=0` and has no C compiler. The pinned commit is the
+official Uber repository's pure-Go implementation, its `go.mod` targets Go 1.24
+(same as this module), and it is confined to the spatial package. Tests make no
+network calls. A fresh module cache still needs `go mod download` before the
+first build.
+
+### Phase 0 pre-check (before writing code)
+
+```text
+go vet ./...
+-> clean (exit 0)
+
+go test ./... -count=1
+-> ok hydroledger-prototype/hydroledger/verifier 1.436s
+```
+
+### Commands and evidence after implementation
+
+```text
+go mod tidy
+-> go.mod now requires github.com/uber/h3-go/v4 v4.5.1-0.20261104181000-32ae003dbaa6
+
+gofmt -l hydroledger/verifier/spatial hydroledger/verifier/identity
+-> no output
+
+go vet ./...
+-> clean (exit 0)
+
+go test ./... -count=1
+-> ok hydroledger-prototype/hydroledger/verifier          0.956s
+-> ok hydroledger-prototype/hydroledger/verifier/identity 0.951s
+-> ok hydroledger-prototype/hydroledger/verifier/spatial  2.846s
+
+go test ./hydroledger/verifier/spatial -count=1 -v
+-> PASS (all spatial tests)
+
+go test ./hydroledger/verifier/identity -count=1 -v
+-> PASS (all identity and security tests)
+
+GOPROXY=off go test ./... -count=1
+-> ok hydroledger-prototype/hydroledger/verifier          0.721s
+-> ok hydroledger-prototype/hydroledger/verifier/identity 0.723s
+-> ok hydroledger-prototype/hydroledger/verifier/spatial  0.703s
+   (proves the tests themselves need no network once the module cache exists)
+
+go test ./... -race -count=1
+-> failed before running: "go: -race requires cgo; enable cgo by setting CGO_ENABLED=1"
+```
+
+Independent cross-check of the pinned H3 expectations: `h3-js` 4.1.0 under
+Node 24.21.0 returned the same cells for resolutions 7–11 and the same
+resolution-9 k=1 neighbour set. `h3-js` was used only for this cross-check and is
+not a project dependency. The committed Go tests depend only on the pinned Go
+module.
+
+The race-enabled Phase 0 baseline came from a linux/amd64 machine. This
+development machine is windows/amd64 with `CGO_ENABLED=0` and no C compiler, so
+the race suite could not be repeated here. The non-race full suite passes, and
+the replay concurrency test asserts that exactly one of 64 concurrent
+verifications of the same envelope is accepted.
+
+### What is IMPLEMENTED
+
+- H3 coordinate conversion, configurable resolution, k-ring lookup, invalid
+  coordinate/resolution/k/cell handling, sorted neighbour lists, adapter to
+  `SetNeighbors`.
+- Ed25519 key generation, rebuild from a 64-byte private key or 32-byte RFC
+  8032 seed, public/private accessors returning copies, signer.
+- Envelope with device id, timestamp, nonce and payload; canonical
+  length-prefixed signing encoding with a domain separator; deterministic
+  signatures; stateless `VerifySignature`.
+- Enrollment interface (`Enroller`, `Registry`), public-key lookup, permanent
+  revocation (`RevocationList`, `RevocationSet`, `Registry`).
+- Replay protection keyed by `(device id, nonce)`, a `Window`/`FutureSkew`
+  timestamp policy, retention of `Window + FutureSkew`, pruning, and atomic
+  check-and-store.
+- Tests required by Task C: valid signature accepted, modified payload
+  rejected, replayed message rejected, expired timestamp rejected, revoked
+  device rejected. Additional tests cover timestamp boundaries, metadata
+  tampering, unknown devices, duplicate enrollment, nonce retention boundaries,
+  rejected messages not consuming nonces, per-device nonce scope, and
+  concurrent replay.
+
+### ASSUMPTIONS (Phase 1)
+
+- **C1 Package location.** `hydroledger/verifier/spatial` and
+  `hydroledger/verifier/identity`, as explained above.
+- **C2 H3 binding.** Official Uber module at a pinned pure-Go commit; tagged
+  `v4.5.0` is cgo and could not build here.
+- **C3 H3 default resolution 9.** Chosen because it is neighbourhood-sized
+  (~0.108 km² at the reference Hyderabad coordinate). This is a project choice,
+  not a field-calibrated optimum; `Config.Resolution` is configurable.
+- **C4 k-ring bound.** Default k = 1; `MaxK = 10` caps a single lookup at 331
+  cells including the centre. This bound is a project choice.
+- **C5 Coordinate validation.** Latitude must be finite and in `[-90, 90]`;
+  longitude finite and in `[-180, 180]`. The H3 binding only rejects NaN/Inf
+  and silently wraps out-of-range values, so the adapter validates first.
+- **C6 Canonical cell ids.** Only the lower-case hexadecimal form returned by
+  H3 is accepted. Uppercase, leading zeros and surrounding whitespace are
+  rejected so one cell cannot be represented by two strings.
+- **C7 Neighbour list semantics.** The H3 grid disk includes the centre; the
+  API excludes it, returns unique ids sorted lexicographically, and returns an
+  empty slice for k = 0. The verifier's neighbour relation is directed, so the
+  adapter configures only the cell named in the call.
+- **C8 Adapter boundary.** `NeighborSetter` is the one-method interface
+  (`SetNeighbors`) implemented by `*verifier.Verifier`. This keeps the spatial
+  package free of a non-test import of the verifier and avoids an import cycle.
+- **C9 Identity time defaults.** `Window = 5m`, `FutureSkew = 30s`. The phase
+  did not specify values; both are configurable and a zero `Config` is invalid.
+- **C10 Canonical signature encoding.** Domain string
+  `hydroledger/identity/telemetry/v1`, then length-prefixed device id, timestamp
+  as Unix seconds plus nanoseconds, nonce, and payload. Length prefixes remove
+  concatenation ambiguity; the domain separates this protocol from other uses
+  of the same Ed25519 key.
+- **C11 Nonce scope and retention.** A nonce must be unique per device within
+  the retention period. Retention is `Window + FutureSkew`; after that the
+  captured envelope is outside the timestamp window anyway, so forgetting the
+  nonce is safe. Different devices may reuse the same nonce string.
+- **C12 Verification order.** Structure, enrollment, revocation, signature,
+  timestamp window, replay. Only a message that passes every earlier check
+  consumes its nonce. This makes rejected messages retryable.
+- **C13 Enrollment.** Duplicate device ids are rejected (no silent key
+  rotation); revoked ids cannot be enrolled. `Enroll` takes a public key and is
+  an administrative interface, not a proof of possession.
+- **C14 Revocation.** Permanent for the lifetime of the registry; revoking an
+  unknown id is allowed so it cannot be enrolled later; there is no un-revoke.
+- **C15 Size limits.** Device id and nonce max 128 bytes, payload max 64 KiB,
+  signatures exactly 64 bytes. These are project choices to bound memory.
+- **C16 Payload is opaque.** Phase 1 does not bind the payload to
+  `verifier.Reading`, JSON, HTTP or a database.
+- **C17 No wall clock.** `Signer.Sign` takes a timestamp; `Verifier.Verify`
+  takes `now`. The package never calls `time.Now`.
+- **C18 Error detail.** Unknown device, revoked device and invalid signature are
+  distinct errors. They are useful diagnostics but can reveal registry
+  membership; this is documented in `CONTRACTS.md`.
+- **C19 Inclusive boundaries.** A message exactly `Window` old or exactly
+  `FutureSkew` in the future is accepted; one nanosecond beyond is rejected.
+- **C20 Key persistence format.** A 64-byte Ed25519 private key or a 32-byte
+  RFC 8032 seed can rebuild a key pair. There is no encrypted key storage in
+  this phase.
+
+### Known limitations
+
+- **L1 Enrolled but compromised devices are trusted.** Possession of the
+  private key is sufficient to sign arbitrary readings. Revocation is the only
+  mitigation exposed. This is the limitation stated in the phase prompt.
+- **L2 H3 does not solve cross-cell collusion.** The existing
+  `TestKnown_CrossCellCollusionCorroborates` still demonstrates that coordinated
+  neighbouring cells can corroborate a fabricated escrow. H3 only defines which
+  cells are neighbours.
+- **L3 Replay state, enrollment and revocation are in memory.** They are lost on
+  restart, so replay across a restart is not detected by this package alone.
+- **L4 No rate limiting.** A valid device can fill the replay map up to the
+  retention bound, and any enrolled device can sign unlimited messages.
+- **L5 No Sybil resistance.** Enrollment authority and device uniqueness are out
+  of scope; one actor can still control many enrolled identities if the
+  enrollment process allows it.
+- **L6 No transport, database or ledger integration.** TLS, HTTP ingestion,
+  PostgreSQL/PostGIS, durable escrow, the audit ledger and signed checkpoints
+  remain PLANNED.
+- **L7 Clock assumptions.** Acceptance assumes roughly synchronised clocks and
+  the configured `Window`/`FutureSkew`. A far-future timestamp is rejected, not
+  clamped.
+- **L8 No key rotation.** Re-enrolling an existing device id is rejected.
+  Rotation needs a new interface and an explicit audit trail.
+- **L9 Race suite not run on this machine.** `-race` needs cgo; this machine has
+  `CGO_ENABLED=0` and no C compiler. Run it on Linux/CI before relying on the
+  concurrency claims.
+- **L10 No field or benchmark evidence for the new packages.** The H3 and
+  identity code is tested, not benchmarked. No field accuracy, production
+  readiness or Sybil-proofness is claimed.
+- **L11 `README.md` was not updated.** It is outside the Phase 1 allowed paths.
+  Its "Standard library only" statement remains true for the existing verifier
+  package, but the repository now has one external H3 dependency. See REQUESTED
+  CHANGES.
+- **L12 H3 geometry is not hydrology.** Cells ignore buildings, terrain,
+  catchments, drainage and radar coverage. Resolution 9 is an engineering
+  default, not a validated neighbourhood definition.
+- **L13 Error messages can leak registry membership.** See C18.
+
+### REQUESTED CHANGES
+
+1. Approval to update `README.md` layout/dependency text so it names
+   `hydroledger/verifier/spatial` and `hydroledger/verifier/identity` and no
+   longer implies the whole repository is standard-library-only. No code or
+   interface change is involved.
+2. Approval, in a later phase, for a key-rotation interface. It is deliberately
+   absent rather than added silently.
+
+### Open questions
+
+1. Is H3 resolution 9 the intended default for Hyderabad, or should resolution
+   be configured per deployment/city?
+2. Should the adapter configure neighbour lists symmetrically for the centre
+   and each neighbour, or should ingestion always call it per observed cell? The
+   verifier's relation is directed; the current adapter does the minimum.
+3. Should revocation carry an effective time so messages signed before
+   revocation can still be verified? Current behaviour rejects every message
+   from a revoked device.
+4. Should nonces be globally unique rather than per device? Per-device scope is
+   sufficient for replay and avoids a shared global namespace, but a registry-
+   wide namespace is stricter.
+5. Should enrollment require a challenge-response proving possession of the
+   private key, rather than accepting an administrator-supplied public key?
+6. Should `Verify` return a coarse "verification failed" error over an API
+   boundary while keeping detailed sentinel errors internally?
+
+### Files created or modified
+
+Created:
+
+- `hydroledger/verifier/spatial/spatial.go`
+- `hydroledger/verifier/spatial/spatial_test.go`
+- `hydroledger/verifier/spatial/README.md`
+- `hydroledger/verifier/identity/errors.go`
+- `hydroledger/verifier/identity/keys.go`
+- `hydroledger/verifier/identity/registry.go`
+- `hydroledger/verifier/identity/verifier.go`
+- `hydroledger/verifier/identity/identity_test.go`
+- `hydroledger/verifier/identity/security_test.go`
+- `hydroledger/verifier/identity/replay_test.go`
+
+Modified:
+
+- `go.mod`, `go.sum` (pinned H3 dependency)
+- `CONTRACTS.md` (Phase 1 additive contracts)
+- `HANDOFF.md` (this entry)
+
+Not modified: `hydroledger/verifier/verifier.go`, all Phase 0 tests, existing
+defaults and reason codes, and `sim/`.
+
+### Suggested next steps (not done)
+
+- Wire the spatial adapter into the planned HTTP ingestion path and persist
+  neighbour configuration.
+- Replace in-memory enrollment/revocation/replay state with durable storage and
+  document restart semantics.
+- Add enrollment challenge-response and an audited key-rotation path.
+- Add rate limiting per device and per cell.
+- Run the full suite with `-race` on a Linux/CI machine with cgo.
+- Evaluate whether radar-only or multi-cell structure can reduce the known
+  cross-cell collusion limitation; H3 indexing alone cannot.
+
+---
+
 ## Entry 2 — 2026-11-07 — Phase 0B Python simulation and ablation engine
 
 ### What was done

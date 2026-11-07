@@ -130,3 +130,272 @@ the same cell serialise. Locks are never nested across cells.
 Persistence, replay/duplicate detection, device authentication, clock-skew
 handling, resistance to coordinated or Sybil reporting, and bounds on the number
 of cells or pending escrows. See `HANDOFF.md`.
+
+---
+
+# Phase 1 additive contracts
+
+The packages below were added in Phase 1. They do not change any existing
+`verifier` type, function, reason code or default.
+
+## Package `hydroledger-prototype/hydroledger/verifier/spatial`
+
+H3 coordinate indexing and the adapter that feeds `Verifier.SetNeighbors`.
+
+```go
+package spatial
+
+const (
+    MinResolution    = 0
+    MaxResolution    = 15
+    DefaultResolution = 9
+    DefaultK          = 1
+    MaxK              = 10
+)
+
+var (
+    ErrInvalidLatitude
+    ErrInvalidLongitude
+    ErrInvalidResolution
+    ErrInvalidK
+    ErrInvalidCell
+    ErrNilIndexer
+    ErrNilNeighborSetter
+)
+
+func DefaultConfig() Config
+func (c Config) Validate() error
+
+type Config struct {
+    Resolution int // default 9, valid 0..15
+    K          int // default 1, valid 0..MaxK
+}
+
+func New(cfg Config) (*Indexer, error)
+func (ix *Indexer) Resolution() int
+func (ix *Indexer) K() int
+
+func CellAt(lat, lng float64, resolution int) (string, error)
+func (ix *Indexer) Cell(lat, lng float64) (string, error)
+func (ix *Indexer) Neighbors(lat, lng float64) (cell string, neighbors []string, err error)
+func NeighborsOf(cellID string, k int) ([]string, error)
+func (ix *Indexer) NeighborsOf(cellID string) ([]string, error)
+func ValidateCell(cellID string) error
+
+type NeighborSetter interface {
+    SetNeighbors(cellID string, neighbors []string)
+}
+
+func NewAdapter(ix *Indexer) (*Adapter, error)
+func (a *Adapter) SetNeighborsForCoordinate(setter NeighborSetter, lat, lng float64) (string, error)
+func (a *Adapter) SetNeighborsForCell(setter NeighborSetter, cellID string) error
+```
+
+### Behaviour
+
+- `lat`/`lng` are degrees. Latitude must be finite and in `[-90, 90]`;
+  longitude must be finite and in `[-180, 180]`. The adapter rejects
+  out-of-range values because the H3 binding itself only rejects NaN/Inf and
+  wraps them.
+- `resolution` must be in `[0, 15]`; `k` must be in `[0, 10]`.
+- Cell ids are canonical lower-case hexadecimal H3 indexes. Empty, malformed,
+  uppercase, leading-zero and whitespace-padded ids are rejected.
+- `NeighborsOf`/`Neighbors` exclude the centre cell, return unique ids sorted
+  lexicographically, and return an empty slice for `k = 0`. Pentagons return
+  fewer than six k=1 neighbours.
+- `Adapter` calls `SetNeighbors` exactly once and returns the centre cell id.
+  A nil `Indexer` or nil `NeighborSetter` is rejected. `*verifier.Verifier`
+  satisfies `NeighborSetter`; the adapter has no non-test dependency on the
+  verifier package.
+- The verifier's neighbour relation is directed. The adapter configures only
+  the cell named in the call; callers must configure every cell whose escrows
+  need corroboration.
+- No state is persisted. H3 geometry does not solve cross-cell collusion.
+
+### H3 dependency
+
+`github.com/uber/h3-go/v4 v4.5.1-0.20261104181000-32ae003dbaa6` (pure-Go
+commit; the tagged `v4.5.0` is cgo). The dependency is pinned in `go.mod` and
+confined to this package. See `hydroledger/verifier/spatial/README.md` for the
+resolution/peer-density discussion.
+
+## Package `hydroledger-prototype/hydroledger/verifier/identity`
+
+Ed25519 device identity, signed telemetry, replay protection and an in-memory
+enrollment/revocation registry. Cryptography is from the Go standard library.
+
+```go
+package identity
+
+const (
+    MaxDeviceIDBytes = 128
+    MaxNonceBytes    = 128
+    MaxPayloadBytes  = 64 * 1024
+
+    DefaultWindow     = 5 * time.Minute
+    DefaultFutureSkew = 30 * time.Second
+)
+
+type Message struct {
+    DeviceID  string
+    Timestamp time.Time
+    Nonce     string
+    Payload   []byte
+}
+
+type Envelope struct {
+    Message
+    Signature []byte
+}
+
+func GenerateKeyPair(deviceID string) (*KeyPair, error)
+func NewKeyPair(deviceID string, privateKey ed25519.PrivateKey) (*KeyPair, error)
+func NewKeyPairFromSeed(deviceID string, seed []byte) (*KeyPair, error)
+func (k *KeyPair) DeviceID() string
+func (k *KeyPair) PublicKey() ed25519.PublicKey
+func (k *KeyPair) PrivateKey() ed25519.PrivateKey
+func (k *KeyPair) Seed() []byte
+func (k *KeyPair) Signer() *Signer
+
+func NewSigner(deviceID string, privateKey ed25519.PrivateKey) (*Signer, error)
+func (s *Signer) DeviceID() string
+func (s *Signer) PublicKey() ed25519.PublicKey
+func (s *Signer) Sign(timestamp time.Time, nonce string, payload []byte) (Envelope, error)
+func NewNonce() (string, error)
+
+func VerifySignature(env Envelope, publicKey ed25519.PublicKey) error
+
+type PublicKeyStore interface {
+    PublicKey(deviceID string) (ed25519.PublicKey, error)
+}
+type RevocationList interface {
+    IsRevoked(deviceID string) bool
+}
+type Enroller interface {
+    Enroll(deviceID string, publicKey ed25519.PublicKey) error
+}
+
+func NewRegistry() *Registry
+func (r *Registry) Enroll(deviceID string, publicKey ed25519.PublicKey) error
+func (r *Registry) PublicKey(deviceID string) (ed25519.PublicKey, error)
+func (r *Registry) Enrolled(deviceID string) bool
+func (r *Registry) Revoke(deviceID string) error
+func (r *Registry) IsRevoked(deviceID string) bool
+
+func NewRevocationSet() *RevocationSet
+func (s *RevocationSet) Revoke(deviceID string) error
+func (s *RevocationSet) IsRevoked(deviceID string) bool
+
+func DefaultConfig() Config
+func (c Config) Validate() error
+
+type Config struct {
+    Window     time.Duration // default 5m; must be > 0
+    FutureSkew time.Duration // default 30s; must be >= 0
+}
+
+func NewVerifier(cfg Config, keys PublicKeyStore, revoked RevocationList) (*Verifier, error)
+func (v *Verifier) Config() Config
+func (v *Verifier) Verify(env Envelope, now time.Time) (Message, error)
+```
+
+### Signed message
+
+`Sign` sets `DeviceID` from the signer, rounds `Timestamp` to remove the
+monotonic reading, copies `Payload`, and signs the following canonical
+length-prefixed encoding:
+
+```
+"hydroledger/identity/telemetry/v1" 0x00
+uint32(len(DeviceID)) || DeviceID
+int64(Timestamp.Unix()) || uint32(Timestamp.Nanosecond())
+uint32(len(Nonce)) || Nonce
+uint32(len(Payload)) || Payload
+```
+
+The domain string gives cross-protocol separation. `Signature` itself is not
+covered. Ed25519 signatures are deterministic, so identical messages produce
+identical signatures. `VerifySignature` validates lengths and the signature but
+does **not** check enrollment, revocation, time or replay; use
+`Verifier.Verify` for the full check.
+
+`NewNonce` returns 16 random bytes from `crypto/rand` encoded as unpadded
+base64url (22 characters). A nonce is required and must be unique per device
+within the replay retention window.
+
+### Verification
+
+`Verifier.Verify(env, now)` checks, in order:
+
+1. `now` is non-zero and the message structure is valid (device id 1..128
+   bytes, non-zero timestamp, nonce 1..128 bytes, payload <= 64 KiB).
+2. The device id is enrolled in the `PublicKeyStore`.
+3. The device is not in the `RevocationList`.
+4. The Ed25519 signature verifies with that device's public key.
+5. `now - Timestamp <= Window` and `Timestamp - now <= FutureSkew`. Both
+   boundaries are inclusive.
+6. The `(DeviceID, Nonce)` pair has not been accepted inside the retention
+   period.
+
+Only a message that passes all earlier checks consumes its nonce. Replay
+retention is `Window + FutureSkew`; entries older than that are pruned. The
+replay key is the device id plus nonce, so different devices may use the same
+nonce. Replay state is in memory and is lost on restart. `Verify` returns a deep
+copy of the payload.
+
+`Verifier` and `Signer` are safe for concurrent use. Concurrent verification of
+the same envelope accepts at most one call.
+
+### Enrollment and revocation
+
+- `Registry.Enroll` rejects a duplicate device id (no silent key rotation) and
+  a revoked device id. `PublicKey` returns `ErrUnknownDevice` for an unknown id.
+- `Revoke` is idempotent and permanently rejects the id for the lifetime of the
+  registry. Revoking an id that was never enrolled is allowed, so a later
+  enrollment is refused. There is no un-revoke.
+- Both `Registry` and `RevocationSet` are in memory only. Persistence and the
+  authority that authorises enrollment are later phases. Construct them with
+  `NewRegistry` / `NewRevocationSet`; their zero values are not initialised.
+
+### Errors
+
+| Error | Meaning |
+|---|---|
+| `ErrInvalidDeviceID` | Device id empty or longer than 128 bytes. |
+| `ErrInvalidPublicKey` | Public key not 32 bytes. |
+| `ErrInvalidPrivateKey` | Private key not 64 bytes. |
+| `ErrInvalidSeed` | Seed not 32 bytes. |
+| `ErrSignatureSize` | Signature not 64 bytes. |
+| `ErrSignatureInvalid` | Signature does not verify. |
+| `ErrNonceInvalid` | Nonce empty or longer than 128 bytes. |
+| `ErrPayloadTooLarge` | Payload larger than 64 KiB. |
+| `ErrTimestampZero` | Message timestamp is the zero time. |
+| `ErrZeroNow` | `Verify` called with a zero reference time. |
+| `ErrUnknownDevice` | Device id not enrolled. |
+| `ErrDeviceRevoked` | Device id is revoked. |
+| `ErrDeviceAlreadyEnrolled` | Device id already has a key. |
+| `ErrNonceReused` | `(device, nonce)` already accepted inside retention. |
+| `ErrTimestampTooOld` | Message older than `Window`. |
+| `ErrTimestampTooFuture` | Message further ahead than `FutureSkew`. |
+| `ErrNilKeyStore` | `NewVerifier` called with a nil key store. |
+| `ErrNilRevocationList` | `NewVerifier` called with a nil revocation list. |
+
+### Security properties and limitations
+
+- A compromised but enrolled device remains trusted: possession of its private
+  key is sufficient to sign arbitrary payloads. Revocation is the only
+  mitigation exposed here.
+- Enrollment authority, identity proofing and Sybil cost are out of scope.
+  `Enroll` is an administrative interface, not a proof of device uniqueness.
+- Keys, enrollment and replay state are in memory and are lost on restart.
+  Replay across a restart is not detected by this package.
+- There is no rate limiting. A valid device can fill the nonce map up to the
+  retention bound.
+- There is no transport security, payload schema, database or ledger. The
+  payload is opaque bytes; binding it to `verifier.Reading` is a later phase.
+- Timestamp acceptance assumes roughly synchronised clocks and the configured
+  skew. A far-future timestamp is rejected, not clamped.
+- Error distinctions (unknown vs revoked vs bad signature) are diagnostic and
+  may reveal registry membership.
+- This package does not make HydroLedger tamper-proof, production-ready or
+  Sybil-proof.
