@@ -36,6 +36,8 @@ type Config struct {
 	Now                 func() time.Time
 	// CORSAllowOrigin, if set, enables simple CORS for browser dashboard reads (dev/integration).
 	CORSAllowOrigin string
+	// Simulator enables gated demo/provisioning endpoints (sim-* data only). Default off.
+	Simulator SimulatorConfig
 }
 
 type Server struct {
@@ -91,6 +93,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /analytics/summary", s.getAnalytics)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("OPTIONS /", s.optionsOK)
+	s.registerSimulatorRoutes(mux)
 	var h http.Handler = mux
 	if s.cfg.CORSAllowOrigin != "" {
 		h = corsMiddleware(s.cfg.CORSAllowOrigin, h)
