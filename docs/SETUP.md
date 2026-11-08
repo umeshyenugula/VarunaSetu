@@ -20,6 +20,14 @@ docker compose up --build
 
 Migrations in `./migrations` are mounted into PostGIS init dir (first-time volume init). For existing volumes, apply migrations manually in order (`001_service.sql`, `002_ledger.sql`).
 
+### Supabase PostgreSQL
+
+Run both migrations in the Supabase SQL Editor, then set `DATABASE_URL` in `.env`
+to the Supabase pooler or direct connection string with `sslmode=require`.
+The Compose API honors `DATABASE_URL` when it is set; otherwise it uses the
+local PostGIS container URL. The local `db` service still starts for Compose
+compatibility, but the API connects to Supabase.
+
 ## Dashboard (standalone)
 
 ```bash

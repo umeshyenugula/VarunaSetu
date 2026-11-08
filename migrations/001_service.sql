@@ -1,3 +1,8 @@
+-- Supabase-compatible service schema.
+-- Run this in the Supabase SQL Editor or with a privileged database connection.
+-- The application should connect using the Supabase pooler/direct database role;
+-- Supabase-managed roles are intentionally not created or revoked here.
+
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 DO $$ BEGIN
@@ -104,16 +109,6 @@ FOR EACH ROW EXECUTE FUNCTION prevent_telemetry_mutation();
 DROP TRIGGER IF EXISTS verification_decision_immutable ON verification_decision;
 CREATE TRIGGER verification_decision_immutable BEFORE UPDATE OR DELETE ON verification_decision
 FOR EACH ROW EXECUTE FUNCTION prevent_decision_mutation();
-
-DO $$ BEGIN
-    CREATE ROLE hydroledger_api NOLOGIN;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
-GRANT USAGE ON SCHEMA public TO hydroledger_api;
-GRANT SELECT, INSERT, UPDATE ON building, telemetry_reading, verification_decision,
-    escrow_record, ledger_entry TO hydroledger_api;
-GRANT SELECT ON device TO hydroledger_api;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
 
 ALTER TABLE telemetry_reading SET (autovacuum_vacuum_scale_factor = 0.02);
 ALTER TABLE verification_decision SET (autovacuum_vacuum_scale_factor = 0.02);

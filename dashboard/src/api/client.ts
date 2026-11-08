@@ -18,20 +18,25 @@ async function fetchJSON<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function fetchList<T>(path: string): Promise<T[]> {
+  const value = await fetchJSON<T[] | null>(path);
+  return value ?? [];
+}
+
 export function listReadings(): Promise<TelemetryReading[]> {
-  return fetchJSON('/telemetry/readings?limit=500');
+  return fetchList('/telemetry/readings?limit=500');
 }
 
 export function listEscrows(): Promise<EscrowRecord[]> {
-  return fetchJSON('/escrows?limit=500');
+  return fetchList('/escrows?limit=500');
 }
 
 export function listLedger(): Promise<LedgerEntryView[]> {
-  return fetchJSON('/ledger/entries?limit=500');
+  return fetchList('/ledger/entries?limit=500');
 }
 
 export function listCells(): Promise<CellState[]> {
-  return fetchJSON('/cells?limit=500');
+  return fetchList('/cells?limit=500');
 }
 
 export function getAnalytics(): Promise<AnalyticsSummary> {

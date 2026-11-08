@@ -60,3 +60,35 @@ th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: 
 .scenarios button.active { border-color: var(--accent); color: var(--accent); background: #f0fdfa; }
 .section-note { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
 pre { white-space: pre-wrap; word-break: break-word; }
+.header-actions, .sim-actions { display: flex; align-items: center; gap: 8px; }
+button { border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+.simulator { min-height: 100vh; background: #0b1220; color: #e5eefc; padding: 16px; }
+.sim-header, .sim-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #111c30; border: 1px solid #263653; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; }
+.sim-title { margin-left: 12px; color: #8fa4c5; }
+.sim-actions button, .sim-toolbar button { color: #e5eefc; background: #1b2b47; border-color: #3a5278; }
+.sim-toolbar { justify-content: flex-start; flex-wrap: wrap; }
+.sim-toolbar input, .sim-toolbar select, .sim-panel input, .sim-panel select { background: #0b1220; color: #e5eefc; border: 1px solid #3a5278; border-radius: 5px; padding: 6px; }
+.sim-toolbar label, .sim-panel label { display: grid; gap: 4px; color: #a9bad4; font-size: .82rem; }
+.sim-toolbar label { display: flex; align-items: center; gap: 6px; }
+.primary { background: #0f766e !important; border-color: #2dd4bf !important; }
+.sim-clock { color: #8fa4c5; margin-left: auto; }
+.sim-layout { display: grid; grid-template-columns: 220px minmax(400px, 1fr) 280px; gap: 12px; min-height: 650px; }
+.sim-panel { background: #111c30; border: 1px solid #263653; border-radius: 10px; padding: 14px; overflow: auto; }
+.sim-panel h2 { font-size: .9rem; margin: 0 0 10px; color: #d9e7fb; }
+.tool-item, .object-item { display: block; width: 100%; text-align: left; color: #c8d8ef; background: #182842; border-color: #32486b; margin: 6px 0; }
+.tool-item { border-style: dashed; cursor: grab; }
+.object-item small, .sensor-row small { display: block; color: #8299ba; font-size: .7rem; }
+.object-item.selected { border-color: #2dd4bf; color: #5eead4; }
+.sim-canvas { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid #263653; background: linear-gradient(135deg, #183d47 0 49%, #1b344d 49% 51%, #183d47 51%); }
+.sim-canvas:before { content: ''; position: absolute; inset: 0; opacity: .35; background-image: linear-gradient(30deg, #8bd1bb 1px, transparent 1px), linear-gradient(150deg, #8bd1bb 1px, transparent 1px); background-size: 56px 32px; }
+.sim-grid { position: absolute; inset: 30px; }
+.building-tile { position: absolute; width: 132px; min-height: 92px; transform: skewY(-12deg) rotate(0deg); display: grid; align-content: center; gap: 2px; color: #e5eefc; background: #315477; border: 2px solid #6f91b8; box-shadow: 12px 12px 0 #0d2535; }
+.building-tile strong, .building-tile small, .building-tile em { transform: skewY(12deg); }
+.building-tile strong { font-size: .75rem; }.building-tile small, .building-tile em { font-size: .65rem; color: #b7c9df; }.building-tile em { color: #fcd34d; font-style: normal; }
+.building-tile.selected { border-color: #2dd4bf; box-shadow: 12px 12px 0 #0d2535, 0 0 0 3px #2dd4bf55; }
+.type-commercial { background: #53618b; }.type-industrial { background: #705b61; }.type-apartment { background: #416e75; }
+.sim-legend { position: absolute; bottom: 12px; left: 16px; display: flex; gap: 14px; color: #b7c9df; font-size: .75rem; }
+.balance-row, .sensor-row { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid #263653; padding: 7px 0; font-size: .78rem; }.balance-row span { color: #9eb2ce; }
+.sensor-row select { max-width: 105px; }.sim-events { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; padding: 12px 16px; background: #111c30; border: 1px solid #263653; border-radius: 10px; color: #9eb2ce; font-size: .76rem; }
+@media (max-width: 1000px) { .sim-layout { grid-template-columns: 180px 1fr; }.sim-layout > .sim-panel:last-child { grid-column: 1 / -1; }.sim-canvas { min-height: 500px; } }

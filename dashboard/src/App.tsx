@@ -4,6 +4,7 @@ import { cellToBoundary } from 'h3-js';
 import 'leaflet/dist/leaflet.css';
 import { getAnalytics, listCells, listEscrows, listLedger, listReadings } from './api/client';
 import type { AnalyticsSummary, CellState, DecisionState, EscrowRecord, LedgerEntryView, TelemetryReading } from './types';
+import Simulator from './simulator/Simulator';
 
 function stateBadge(state: DecisionState | string) {
   const cls = state === 'ACCEPT' ? 'accept' : state === 'PROVISIONAL_ESCROW' ? 'escrow' : state === 'QUARANTINE' ? 'quarantine' : '';
@@ -31,6 +32,7 @@ function useCountdown(target?: string) {
 }
 
 export default function App() {
+  const [view, setView] = useState(() => window.location.hash === '#simulator' ? 'simulator' : 'dashboard');
   const [readings, setReadings] = useState<TelemetryReading[]>([]);
   const [escrows, setEscrows] = useState<EscrowRecord[]>([]);
   const [ledger, setLedger] = useState<LedgerEntryView[]>([]);
@@ -59,6 +61,8 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
+  if (view === 'simulator') return <Simulator onBack={() => { window.location.hash = ''; setView('dashboard'); }} />;
+
   return (
     <div className="app">
       <header className="header">
@@ -66,7 +70,7 @@ export default function App() {
           <h1>HydroLedger Dashboard</h1>
           <p>Operational telemetry verification, escrow workflow, spatial status, and audit records.</p>
         </div>
-        <span className="badge">LIVE DATABASE</span>
+        <div className="header-actions"><span className="badge">LIVE DATABASE</span><button onClick={() => { window.location.hash = 'simulator'; setView('simulator'); }}>Open urban simulator</button></div>
       </header>
 
       {error && <div className="banner error" role="alert">Live data unavailable: {error}. Configure the API and database before using this dashboard.</div>}

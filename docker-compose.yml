@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-hydroledger}:${POSTGRES_PASSWORD:-hydroledger}@db:5432/${POSTGRES_DB:-hydroledger}?sslmode=disable
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-hydroledger}:${POSTGRES_PASSWORD:-hydroledger}@db:5432/${POSTGRES_DB:-hydroledger}?sslmode=disable}
       HTTP_ADDR: :8080
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-http://localhost:5173}
     ports:
