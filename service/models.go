@@ -79,13 +79,18 @@ type ReadingView struct {
 // EscrowView is a dashboard-friendly escrow projection (additive read API).
 type EscrowView struct {
 	ID             string     `json:"id"`
+	ReadingID      string     `json:"readingId"`
 	DeviceID       string     `json:"deviceId"`
 	H3Index        string     `json:"h3Index"`
 	State          string     `json:"state"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	ExpiresAt      time.Time  `json:"expiresAt"`
 	CorroboratedAt *time.Time `json:"corroboratedAt,omitempty"`
-	Simulated      bool       `json:"simulated"`
+	ResolvedAt     *time.Time `json:"resolvedAt,omitempty"`
+	// Resolution says how a resolved escrow was settled, taken from the audit
+	// ledger: RADAR, H3_NEIGHBORS or EXPIRED. Empty while PENDING.
+	Resolution string `json:"resolution,omitempty"`
+	Simulated  bool   `json:"simulated"`
 }
 
 // CellSummary is a dashboard-friendly cell state projection.

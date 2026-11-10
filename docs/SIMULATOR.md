@@ -1,36 +1,39 @@
-# Urban Water Simulator (Judge Demo)
+# Urban water simulator
 
-The simulator is available at `http://localhost:5173/#simulator` and is designed to demonstrate HydroLedger/VarunaSetu as a **virtual city** over a real H3-indexed network — not a static mockup.
+The simulator is available at `http://localhost:5173/#simulator` and is
+separate from the intelligence dashboard view.
 
-## What it demonstrates
+The current vertical slice provides:
 
-- **H3 network working:** devices/buildings are mapped to canonical H3 cells (resolution 9). The UI renders H3 polygons and live cell states from `/cells`, showing how the same spatial index drives peer grouping and neighbourhood context.
-- **Real system behavior:** when the gated simulator API is enabled, the dashboard provisions demo buildings/devices, signs telemetry in the browser using Ed25519 (same canonical envelope format as the Go identity package), and submits to the real `POST /telemetry/readings` endpoint.
-- **Every major case (catalog):** honest consensus accept, spatial peer outlier/tamper, physical bound exceeded, radar–peer conflict → provisional escrow, escrow corroborated by later wet radar, escrow expiry (gated demo sweep), capacity/integrity constraints, signed identity/idempotency/replay contract, audit ledger, and an explained neighbor-corroboration capability note (durable HTTP path currently applies radar corroboration + expiry).
-- **Gap vs existing solutions:** each case explains what static/manual/isolated systems miss and how HydroLedger uses H3 + physics + robust peer consensus + escrow + audit evidence.
+- A deterministic demo neighbourhood with residential, apartment, commercial,
+  and industrial buildings.
+- Building creation and configuration for roof area, runoff coefficient, tanks,
+  and recharge pits.
+- Drag-and-drop virtual rain gauge, flow meter, and water-level sensors.
+- Validation that water-level sensors can only be attached to buildings with a
+  tank.
+- Adjustable rainfall intensity, start/pause controls, and 1x/5x/10x/30x
+  simulation speed.
+- Deterministic rooftop runoff using
+  `rainfall depth × roof area × runoff coefficient`.
+- Separate rainfall, runoff, captured, overflow, recharge, and stored-water
+  accounting.
+- Explicit sensor fault states and local session save/reset controls.
 
-## Running the full live demo
+Simulation state is local to the browser. The UI labels all generated data as
+`SIMULATED`. Backend transmission is not faked: the existing telemetry API
+requires enrolled Ed25519 device keys and signed payloads, so the next
+integration stage must add simulator-device enrollment and signing before
+submitting events to `POST /telemetry/readings`.
 
-1. Apply migrations (`001_service.sql`, `002_ledger.sql`).
-2. Start API with simulator endpoints enabled:
-   - `ENABLE_SIMULATOR_API=true`
-   - `DATABASE_URL=...`
-   - `CORS_ALLOW_ORIGIN=http://localhost:5173` (or dashboard origin)
-3. Start dashboard with `VITE_API_BASE` pointing to the API.
-4. Open `/#simulator`, click **Provision virtual city**, then run cases. The UI auto-refreshes live `/telemetry/readings`, `/escrows`, `/cells`, `/ledger/entries`, and `/analytics/summary`.
+The simulator intentionally does not calculate or display backend verification
+decisions. Those remain authoritative in the Go service and intelligence
+dashboard.
 
-## Gated simulator API (demo only)
+## Backend-integrated virtual city
 
-Enabled only when `ENABLE_SIMULATOR_API=true`:
-
-- `POST /simulator/provision` — creates/resets `sim-bld-*` / `sim-dev-*` demo records and returns Ed25519 seeds/metadata for browser signing.
-- `POST /simulator/reset` — deletes scoped `sim-dev-*` telemetry/escrows/decisions/ledger-linked rows and resets sim building reservations.
-- `POST /simulator/expire-escrows` — runs durable expiry sweep with an advanced clock for judge demos (event-time escrow TTL defaults to 15 minutes).
-- `GET /simulator/cases` — structured case catalog.
-
-Security/accuracy notes:
-
-- Demo keys are returned to the browser only for the gated local/demo flow. Do not enable in production.
-- Real verification decisions are computed by the backend verifier/repository; the UI does not fabricate decisions.
-- All demo data is labeled **SIMULATED**. Signed payload timestamps use wall-clock time to satisfy the real timestamp window.
-- Neighbor-cell corroboration is a verifier/H3 capability; the durable service currently wires radar corroboration and expiry. The UI presents this status accurately.
+The browser simulator above stays local. The integration stage it mentions now
+exists as a separate Go tool, `citysim` (`go run ./cmd/citysim serve`): it
+enrols simulated devices, signs every reading with Ed25519 and sends it to the
+real `POST /telemetry/readings`. Verdicts shown there are the service's own.
+See [`DEMO.md`](DEMO.md) and [`DEMO_RESULTS.md`](DEMO_RESULTS.md).

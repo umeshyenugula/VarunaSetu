@@ -36,8 +36,10 @@ type Config struct {
 	Now                 func() time.Time
 	// CORSAllowOrigin, if set, enables simple CORS for browser dashboard reads (dev/integration).
 	CORSAllowOrigin string
-	// Simulator enables gated demo/provisioning endpoints (sim-* data only). Default off.
-	Simulator SimulatorConfig
+	// NeighborK is the H3 k-ring radius used to corroborate escrows from
+	// neighbouring cells (0 selects spatial.DefaultK; a negative value turns
+	// neighbour corroboration off).
+	NeighborK int
 }
 
 type Server struct {
@@ -68,6 +70,9 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.NeighborK == 0 {
+		cfg.NeighborK = spatial.DefaultK
+	}
 	if cfg.IdentityConfig.Window == 0 && cfg.IdentityConfig.FutureSkew == 0 {
 		if cfg.Identity != nil {
 			cfg.IdentityConfig = cfg.Identity.Config()
@@ -93,7 +98,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /analytics/summary", s.getAnalytics)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("OPTIONS /", s.optionsOK)
-	s.registerSimulatorRoutes(mux)
 	var h http.Handler = mux
 	if s.cfg.CORSAllowOrigin != "" {
 		h = corsMiddleware(s.cfg.CORSAllowOrigin, h)
@@ -111,14 +115,34 @@ func (s *Server) StartExpiryWorker(ctx context.Context) {
 				return
 			case <-s.stop:
 				return
-			case now := <-t.C:
-				if err := s.cfg.Repository.ExpireEscrows(ctx, now); err != nil {
-					s.cfg.Logger.Error("escrow expiry failed", "error", err)
+			case <-t.C:
+				if err := s.Sweep(ctx, s.now()); err != nil {
+					s.cfg.Logger.Error("escrow sweep failed", "error", err)
 				}
 			}
 		}
 	}()
 }
+
+// Sweep resolves pending escrows as of now, in the verifier's precedence
+// order: (radar corroboration already happened at ingest), H3 neighbour
+// corroboration for escrows still inside their TTL, then expiry of the rest.
+// The expiry worker calls it on a timer; tests and the city simulator call it
+// directly with a virtual clock.
+func (s *Server) Sweep(ctx context.Context, now time.Time) error {
+	if s.cfg.NeighborK > 0 {
+		if _, err := s.cfg.Repository.CorroborateEscrowsByNeighbors(ctx, now, s.cfg.Verifier.Config(), s.cfg.NeighborK); err != nil {
+			return err
+		}
+	}
+	return s.cfg.Repository.ExpireEscrows(ctx, now)
+}
+
+// NeighborK is the H3 k-ring radius used for neighbour corroboration.
+func (s *Server) NeighborK() int { return s.cfg.NeighborK }
+
+// Now returns the server's current time (the injectable clock).
+func (s *Server) Now() time.Time { return s.now() }
 
 func (s *Server) Close() {
 	s.closeOnce.Do(func() { close(s.stop) })
@@ -280,11 +304,30 @@ func (s *Server) postReading(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Field-validation and capacity failures are rejected, not recorded
+	// (CONTRACTS.md): answer with the verifier's verdict instead of failing
+	// later at the database CHECK constraints with an opaque 500.
+	if d.Reason == verifier.ReasonInvalidInput || d.Reason == verifier.ReasonCapacityExceeded {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error":    "telemetry rejected before recording",
+			"decision": d,
+		})
+		return
+	}
+
 	hash := sha256.Sum256(msg.Payload)
 	result, err := s.cfg.Repository.StoreReading(r.Context(), msg.DeviceID, msg.Nonce, msg.Timestamp, telemetry, d, msg.Timestamp.Add(vcfg.EscrowTTL), hash[:], vcfg)
 	if err != nil {
 		if errors.Is(err, ErrIdempotencyConflict) {
 			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if errors.Is(err, ErrCapacityReservation) {
+			writeError(w, http.StatusConflict, "claim exceeds the building's reservable capacity")
+			return
+		}
+		if errors.Is(err, ErrNotFound) {
+			writeError(w, http.StatusNotFound, "unknown building_id")
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {

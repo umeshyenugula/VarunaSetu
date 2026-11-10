@@ -34,6 +34,24 @@ Covers migrations/idempotency/malformed requests, escrow behavior, etc. (see `se
 | E. Invalid device signature | **PASS (service integration)** | Signed request validation and malformed/reordered/replay cases are covered by service tests. |
 | F. Audit integrity | **PASS** | Library tamper/checkpoint tests pass and service events append transactionally to the persisted chain. |
 
+## Virtual-city end-to-end (live HTTP + PostGIS)
+
+`citysim` closes the gap listed earlier as "signed e2e scenarios via live
+HTTP+DB": it enrols devices, signs real telemetry, and runs twelve scenarios
+through the real service with a virtual clock.
+
+```bash
+export HYDROLEDGER_TEST_DATABASE_URL="postgres://USER:PASS@localhost:5432/DB?sslmode=disable"
+go test ./citysim -count=1            # all scenarios + unit tests (~30 s); -short runs two
+go test ./service -count=1            # includes neighbour corroboration and error-path tests
+go run ./cmd/citysim verify -report docs/DEMO_RESULTS.md
+```
+
+Every scenario carries self-checks (for example "no escrow expired", "fake cell
+is not credited") plus a re-verification of the audit hash chain. Scenarios
+marked as documented limits assert that the limit is *reproduced*, so a future
+fix will fail them on purpose and force this documentation to be updated.
+
 ## Regression rule
 
 After any integration change, re-run: Go core+ledger tests (race where possible), `go build ./cmd/server ./service`, dashboard `npm test && npm run build`, and service DB tests when available.

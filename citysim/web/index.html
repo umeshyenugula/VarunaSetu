@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VarunaSetu · Virtual Hyderabad</title>
+<style>
+:root{
+  --bg:#0b1220;--panel:#111a2e;--panel2:#16213a;--line:#24324f;--text:#e6edf7;--mute:#8fa1bd;
+  --ok:#2ecc71;--warn:#f5a623;--bad:#ff5a5f;--idle:#64748b;--accent:#4cc3ff;--violet:#a78bfa;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+button,select{font:inherit;color:inherit}
+header{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.brand{font-weight:700;letter-spacing:.2px;margin-right:8px}
+.brand small{display:block;font-weight:400;color:var(--mute);font-size:11px}
+select,button{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);color:#04121f;border-color:var(--accent);font-weight:600}
+.spacer{flex:1}
+.pill{padding:3px 9px;border-radius:99px;border:1px solid var(--line);font-size:12px;color:var(--mute);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:#1f6b45}.pill.bad{color:var(--bad);border-color:#7a2b2e}
+#clock{font-family:var(--mono)}
+main{display:grid;grid-template-columns:minmax(560px,1.25fr) minmax(430px,1fr);gap:12px;padding:12px;height:calc(100% - 64px)}
+.col{display:flex;flex-direction:column;gap:12px;min-height:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-height:0}
+.card h3{margin:0;padding:9px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mute);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.card h3 .r{margin-left:auto;text-transform:none;letter-spacing:0}
+.body{padding:10px 12px}
+#mapCard{flex:1.6;display:flex;flex-direction:column}
+#mapWrap{position:relative;flex:1;min-height:300px}
+svg#map{position:absolute;inset:0;width:100%;height:100%}
+.tools{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line);align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:5px 10px;background:transparent}
+.seg button.on{background:var(--accent);color:#04121f;font-weight:600}
+label.chk{display:inline-flex;gap:5px;align-items:center;color:var(--mute);font-size:12px;cursor:pointer}
+.legend{display:flex;gap:12px;flex-wrap:wrap;padding:6px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.cellpoly{stroke:#2c3d63;stroke-width:1;transition:fill .5s;cursor:pointer}
+.cellpoly.focus{stroke:var(--violet);stroke-width:2.2}
+.cellpoly.sel{stroke:#fff;stroke-width:2.6}
+.cellpoly.ring{stroke:var(--violet);stroke-width:2;stroke-dasharray:5 3}
+.cellpoly.blind{stroke:var(--bad);stroke-width:2.4;stroke-dasharray:4 3}
+.clabel{font-size:9.5px;fill:#b8c6de;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#0b1220;stroke-width:2.4px}
+.badge{font-size:11px;font-weight:700;fill:var(--warn);text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#0b1220;stroke-width:3px}
+.dot{stroke:#0b1220;stroke-width:.8;transition:fill .3s;cursor:pointer}
+.dot.fraud{stroke:#fff;stroke-width:1.8}
+.storm{fill:rgba(76,195,255,.10);stroke:var(--accent);stroke-dasharray:6 4;stroke-width:1.4;pointer-events:none}
+.stormlbl{fill:var(--accent);font-size:11px;font-weight:600;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#0b1220;stroke-width:3px}
+.link{stroke-width:2.4;stroke-dasharray:6 6;fill:none;animation:flow 1s linear infinite;pointer-events:none}
+@keyframes flow{to{stroke-dashoffset:-24}}
+.pulse{fill:none;stroke-width:3;pointer-events:none;animation:pulse 1.6s ease-out forwards}
+@keyframes pulse{from{r:6;opacity:1}to{r:34;opacity:0}}
+#bottom{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;flex:1;min-height:210px}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.step{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 8px;min-height:92px}
+.step b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);margin-bottom:3px}
+.step .v{font-family:var(--mono);font-size:12px;word-break:break-word}
+.step.good{border-color:#1f6b45}.step.warn{border-color:#8a5a12}.step.bad{border-color:#7a2b2e}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:600;font-family:var(--mono)}
+.t-ACCEPT{background:#12391f;color:var(--ok)}.t-PROVISIONAL_ESCROW,.t-PENDING{background:#3f2d0b;color:var(--warn)}
+.t-QUARANTINE,.t-REJECT,.t-ERROR{background:#451b1e;color:var(--bad)}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{border:0;border-radius:0;background:transparent;padding:9px 12px;color:var(--mute);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+.pane{display:none;overflow:auto;flex:1;min-height:0}
+#sideCard{flex:1;display:flex;flex-direction:column}
+.story h4,.h4{margin:12px 0 3px;font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--accent)}
+.story p{margin:0 0 4px}
+.limit{background:#3a2a0a;color:var(--warn);border:1px solid #7a5513;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700}
+.checks div{display:flex;gap:8px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.checks .p{color:var(--ok)}.checks .f{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{position:sticky;top:0;background:var(--panel);text-align:left;color:var(--mute);font-weight:600;padding:5px 8px;border-bottom:1px solid var(--line)}
+td{padding:4px 8px;border-bottom:1px solid #1b2943;vertical-align:top}
+tr.row{cursor:pointer}tr.row:hover{background:var(--panel2)}tr.row.sel{background:#1a2c4d}
+.mono{font-family:var(--mono)}
+.bar{height:8px;border-radius:4px;background:#24324f;overflow:hidden;min-width:70px}
+.bar i{display:block;height:100%;background:var(--ok)}
+.bar.v i{background:var(--accent)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--line)}
+.chip{padding:3px 9px;border-radius:99px;border:1px solid var(--line);cursor:pointer;font-size:12px;color:var(--mute)}
+.chip.on{background:var(--accent);color:#04121f;border-color:var(--accent)}
+.note{color:var(--mute);font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mini{font-size:12px}
+.hl{color:var(--accent)}
+a{color:var(--accent)}
+#toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#2a1214;border:1px solid #7a2b2e;color:#ffc9cb;padding:9px 14px;border-radius:8px;display:none;z-index:9}
+@media (max-width:1100px){main{grid-template-columns:1fr;height:auto}#bottom{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">VarunaSetu<small>Virtual Hyderabad · real service, real H3, real signatures</small></div>
+  <select id="scn" title="Scenario"></select>
+  <button id="run" class="primary">▶ Run</button>
+  <button id="pause" disabled>⏸ Pause</button>
+  <button id="stop" disabled>■ Stop</button>
+  <select id="speed" title="Simulation speed (simulated seconds per real second)">
+    <option value="60">60×</option><option value="120" selected>120×</option><option value="300">300×</option><option value="900">900×</option><option value="0">Max</option>
+  </select>
+  <button id="runall" title="Run every scenario back to back at maximum speed">Run all ⏩</button>
+  <span class="spacer"></span>
+  <span class="pill" id="apiPill">API …</span>
+  <span class="pill" id="clock">sim —</span>
+</header>
+<main>
+ <div class="col">
+  <div class="card" id="mapCard">
+    <h3>Virtual city · H3 resolution <span id="res">9</span> <span class="r note" id="mapNote"></span></h3>
+    <div class="tools">
+      <div class="seg" id="layer">
+        <button data-l="truth" class="on" title="True rain rate at each cell">Rain (truth)</button>
+        <button data-l="radar" title="What the radar reports. Dashed red = radar blind while it really rains">Radar</button>
+        <button data-l="verdict" title="Most recent verdicts in each cell">Verdicts</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="showTruth" checked> mark manipulated devices</label>
+      <label class="chk"><input type="checkbox" id="showRing" checked> show H3 k-ring on hover</label>
+      <span class="note">click a cell to inspect its neighbour evidence</span>
+    </div>
+    <div id="mapWrap"><svg id="map" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>accepted</span>
+      <span><i style="background:var(--warn)"></i>escrow (held)</span>
+      <span><i style="background:var(--bad)"></i>quarantined / rejected</span>
+      <span><i style="background:var(--idle)"></i>no recent report</span>
+      <span><i style="background:#fff"></i>white ring = manipulated (ground truth)</span>
+      <span style="color:var(--warn)">⏳n = escrows pending in cell</span>
+    </div>
+  </div>
+  <div id="bottom">
+    <div class="card" style="display:flex;flex-direction:column">
+      <h3>What happened to this reading <span class="r note" id="jHint">click a row in Live API</span></h3>
+      <div class="body" id="journey"><span class="note">Waiting for the first reading…</span></div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column">
+      <h3>Cell inspector · H3 neighbours <span class="r mono note" id="cellId"></span></h3>
+      <div class="body" id="inspector" style="overflow:auto"><span class="note">Click any cell on the map. The server evaluates the same neighbour rule it uses to release escrows.</span></div>
+    </div>
+  </div>
+ </div>
+ <div class="col">
+  <div class="card" id="sideCard">
+    <div class="tabs" id="tabs">
+      <button data-p="story" class="on">Scenario</button>
+      <button data-p="log">Live API</button>
+      <button data-p="score">Scoreboard</button>
+      <button data-p="probes">Attacks</button>
+      <button data-p="all">All scenarios</button>
+    </div>
+    <div class="pane story" id="p-story" style="display:block"><div class="body" id="storyBody"></div></div>
+    <div class="pane" id="p-log" style="flex-direction:column">
+      <div class="chips" id="chips">
+        <span class="chip on" data-f="all">all</span><span class="chip" data-f="ACCEPT">accept</span>
+        <span class="chip" data-f="PROVISIONAL_ESCROW">escrow</span><span class="chip" data-f="QUARANTINE">quarantine</span>
+        <span class="chip" data-f="fraud">manipulated</span><span class="chip" data-f="ERROR">errors</span>
+        <span class="note" style="margin-left:auto" id="logCount"></span>
+      </div>
+      <div style="overflow:auto;flex:1"><table id="logTbl"><thead><tr><th>sim min</th><th>request</th><th>device</th><th>verdict</th><th>R_obs</th><th>ms</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="pane" id="p-score"><div class="body" id="scoreBody"></div></div>
+    <div class="pane" id="p-probes"><div class="body" id="probeBody"><span class="note">Run “Attacks on the door, not the data”.</span></div></div>
+    <div class="pane" id="p-all"><div class="body" id="allBody"><span class="note">Press <b>Run all</b> to execute every scenario back to back and fill this matrix.</span></div></div>
+  </div>
+  <div class="note" style="padding:0 4px">Verify it yourself: <a href="/analytics/summary" target="_blank">/analytics/summary</a> · <a href="/escrows" target="_blank">/escrows</a> · <a href="/cells" target="_blank">/cells</a> · <a href="/ledger/entries" target="_blank">/ledger/entries</a> · <a href="/telemetry/readings" target="_blank">/telemetry/readings</a>. Only the weather and the clock are simulated.</div>
+ </div>
+</main>
+<div id="toast"></div>
+<script>
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a={},p)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+const fmt=(x,d=2)=>x==null||isNaN(x)?'—':(+x).toFixed(d);
+const short=id=>id?id.slice(-6):'';
+const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',5000)}
+
+const S={world:null,scns:[],cur:null,cells:{},devs:{},outcomes:[],byReading:{},tick:null,layer:'truth',
+  selCell:null,hoverCell:null,logFilter:'all',selOutcome:null,autoSel:true,probes:[],pending:{},summary:null,matrix:[],
+  running:false,paused:false,dirty:true,logDirty:true,reasons:{},simMin:0,durationMin:0};
+const P={};
+const COL={ACCEPT:'#2ecc71',PROVISIONAL_ESCROW:'#f5a623',PENDING:'#f5a623',QUARANTINE:'#ff5a5f',REJECT:'#ff5a5f',ERROR:'#ff5a5f',none:'#64748b'};
+
+/* ---------- world & map ---------- */
+async function loadWorld(){
+  const [w,sc,st]=await Promise.all([fetch('/sim/world').then(r=>r.json()),fetch('/sim/scenarios').then(r=>r.json()),fetch('/sim/state').then(r=>r.json())]);
+  S.world=w;S.scns=sc;$('#res').textContent=w.resolution;
+  w.cells.forEach(c=>{c.truth=0;c.radar=0;c.recent=[];S.cells[c.id]=c});
+  w.devices.forEach(d=>{d.last='none';d.fraud=false;S.devs[d.id]=d});
+  const sel=$('#scn');
+  const mk=(grp,list)=>{const g=document.createElement('optgroup');g.label=grp;list.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.title;g.appendChild(o)});sel.appendChild(g)};
+  mk('What VarunaSetu handles',sc.filter(s=>!s.limitation));mk('Documented limits (shown on purpose)',sc.filter(s=>s.limitation));
+  sel.onchange=()=>showScenario(sel.value);
+  buildMap();showScenario(sc[0].id);
+  S.matrix=st.matrix||[];renderAll();renderScore();
+  if(st.running){S.running=true;S.paused=!!st.paused;setButtons()}
+  const ok=await fetch('/healthz').then(r=>r.ok).catch(()=>false);
+  const p=$('#apiPill');p.textContent=ok?'API ✓ '+location.host:'API ✗';p.className='pill '+(ok?'ok':'bad');
+}
+function buildMap(){
+  const svg=$('#map');svg.innerHTML='';
+  const W=1000,H=860,pad=36;
+  let la0=1e9,la1=-1e9,lo0=1e9,lo1=-1e9;
+  S.world.cells.forEach(c=>c.boundary.forEach(([la,lo])=>{la0=Math.min(la0,la);la1=Math.max(la1,la);lo0=Math.min(lo0,lo);lo1=Math.max(lo1,lo)}));
+  const k=Math.cos(S.world.lat*Math.PI/180);
+  const sx=(W-2*pad)/((lo1-lo0)*k),sy=(H-2*pad)/(la1-la0),s=Math.min(sx,sy);
+  P.s=s;P.k=k;P.ox=(W-(lo1-lo0)*k*s)/2;P.oy=(H-(la1-la0)*s)/2;P.lo0=lo0;P.la1=la1;
+  P.xy=(la,lo)=>[P.ox+(lo-P.lo0)*P.k*P.s,P.oy+(P.la1-la)*P.s];
+  P.m=(x,y)=>{const la=S.world.lat+y/110540,lo=S.world.lng+x/(111320*Math.cos(S.world.lat*Math.PI/180));return P.xy(la,lo)};
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  const gC=el('g',{},svg),gS=el('g',{},svg),gL=el('g',{},svg),gD=el('g',{},svg),gT=el('g',{},svg),gP=el('g',{},svg);
+  S.world.cells.forEach(c=>{
+    const pts=c.boundary.map(([la,lo])=>P.xy(la,lo).join(',')).join(' ');
+    const poly=el('polygon',{points:pts,class:'cellpoly',fill:'#16233f'},gC);
+    poly.onmouseenter=()=>{S.hoverCell=c.id;ringHighlight()};poly.onmouseleave=()=>{S.hoverCell=null;ringHighlight()};
+    poly.onclick=()=>inspect(c.id);
+    c.poly=poly;const xy=P.xy(c.lat,c.lng);c.px=xy[0];c.py=xy[1];
+    c.lbl=el('text',{x:c.px,y:c.py+3,class:'clabel'},gT);c.lbl.textContent=c.label;
+    c.badge=el('text',{x:c.px,y:c.py-9,class:'badge'},gT);
+  });
+  S.world.devices.forEach(d=>{const xy=P.xy(d.lat,d.lng);d.dot=el('circle',{cx:xy[0],cy:xy[1],r:3.4,class:'dot',fill:COL.none},gD);
+    d.dot.onclick=()=>{const o=lastOf(d.id);if(o){S.autoSel=false;selectOutcome(o)}};
+    el('title',{},d.dot).textContent=d.id+' · '+d.kind+' · '+d.roofM2+' m²'});
+  S.g={gC:gC,gS:gS,gL:gL,gD:gD,gT:gT,gP:gP};
+}
+function lastOf(dev){for(let i=S.outcomes.length-1;i>=0;i--)if(S.outcomes[i].device===dev)return S.outcomes[i]}
+function rainFill(v){if(v<1)return '#16233f';const t=Math.min(1,v/55);return 'rgb('+Math.round(22+20*(1-t))+','+Math.round(60+90*t)+','+Math.round(110+135*t)+')'}
+function verdictFill(c){
+  if(!c.recent.length)return '#16233f';
+  const bad=c.recent.filter(x=>x==='QUARANTINE'||x==='REJECT'||x==='ERROR').length,warn=c.recent.filter(x=>x==='PROVISIONAL_ESCROW').length,ok=c.recent.length-bad-warn;
+  if(bad>=Math.max(1,c.recent.length*0.25))return '#5a2429';
+  if(warn>=Math.max(1,c.recent.length*0.25))return '#5a4217';
+  return ok?'#1c4a31':'#16233f';
+}
+function paintMap(){
+  const showTruth=$('#showTruth').checked;
+  const pend={};Object.values(S.pending).forEach(p=>{pend[p.cell]=(pend[p.cell]||0)+1});
+  for(const c of S.world.cells){
+    let f;
+    if(S.layer==='truth')f=rainFill(c.truth);else if(S.layer==='radar')f=rainFill(c.radar);else f=verdictFill(c);
+    c.poly.setAttribute('fill',f);
+    c.poly.classList.toggle('blind',S.layer==='radar'&&c.truth>=8&&c.radar<=1);
+    c.poly.classList.toggle('focus',!!(S.cur&&S.cur.focus&&S.cur.focus.includes(c.id)));
+    c.poly.classList.toggle('sel',S.selCell===c.id);
+    c.badge.textContent=pend[c.id]?'⏳'+pend[c.id]:'';
+  }
+  for(const d of S.world.devices){d.dot.setAttribute('fill',COL[d.last]||COL.none);d.dot.classList.toggle('fraud',showTruth&&d.fraud)}
+  $('#mapNote').textContent=S.layer==='radar'?'dashed red = radar blind while it really rains':'';
+}
+function ringHighlight(){
+  const id=S.hoverCell||S.selCell;
+  for(const c of S.world.cells)c.poly.classList.remove('ring');
+  if(!id||!$('#showRing').checked)return;
+  (S.cells[id].neighbors||[]).forEach(n=>{if(S.cells[n])S.cells[n].poly.classList.add('ring')});
+}
+function drawStorms(list){
+  const g=S.g.gS;g.innerHTML='';
+  (list||[]).forEach(s=>{const xy=P.m(s.x,s.y);const r=Math.max(10,s.sigma*P.s/110540*1.6);
+    el('circle',{cx:xy[0],cy:xy[1],r:r,class:'storm'},g);
+    const t=el('text',{x:xy[0],y:xy[1]-r-4,class:'stormlbl'},g);t.textContent=s.name+' · '+Math.round(s.mmh)+' mm/h'});
+}
+function animateLinks(cellId,fromIds,color){
+  const c=S.cells[cellId];if(!c)return;const g=S.g.gL;
+  if(g.childElementCount>40)return;
+  fromIds.forEach(id=>{const n=S.cells[id];if(!n)return;
+    const l=el('line',{x1:n.px,y1:n.py,x2:c.px,y2:c.py,class:'link',stroke:color},g);setTimeout(()=>l.remove(),2600)});
+  const p=el('circle',{cx:c.px,cy:c.py,class:'pulse',stroke:color},S.g.gP);setTimeout(()=>p.remove(),1700);
+}
+
+/* ---------- events ---------- */
+const queue=[];
+function connect(){const es=new EventSource('/sim/stream');es.onmessage=m=>{queue.push(JSON.parse(m.data))}}
+function pump(){
+  let n=0;while(queue.length&&n<300){handle(queue.shift());n++}
+  if(S.dirty){paintMap();S.dirty=false}
+  if(S.logDirty){renderLog();renderScore();S.logDirty=false}
+  requestAnimationFrame(pump);
+}
+function handle(e){
+  const d=e.data;
+  switch(e.type){
+  case 'run_start':reset(d);break;
+  case 'tick':S.tick=d;S.simMin=d.simMin;
+    d.cells.forEach(t=>{const c=S.cells[t.id];if(c){c.truth=t.truth;c.radar=t.radar}});
+    drawStorms(d.storms);setClock(d);S.dirty=true;break;
+  case 'reading':onReading(d);break;
+  case 'escrow':onEscrow(d);break;
+  case 'probe':S.probes.push(d);renderProbes();break;
+  case 'run_end':S.summary=d;S.running=false;setButtons();renderStory();renderProbes();S.logDirty=true;S.dirty=true;break;
+  case 'run_error':S.running=false;setButtons();toast('Run failed: '+d.error);break;
+  case 'batch':S.matrix=S.matrix.filter(r=>r.scenario!==d.scenario).concat([d]);renderAll();break;
+  case 'batch_done':S.running=false;setButtons();toast('All scenarios finished');break;
+  }
+}
+function reset(d){
+  S.running=true;S.outcomes=[];S.byReading={};S.pending={};S.probes=[];S.summary=null;S.reasons={};S.selOutcome=null;S.autoSel=true;S.simMin=0;
+  S.cur=S.scns.find(s=>s.id===d.scenario.id)||d.scenario;S.durationMin=d.durationMin;
+  S.world.cells.forEach(c=>{c.truth=0;c.radar=0;c.recent=[]});
+  S.world.devices.forEach(x=>{x.last='none';x.fraud=false});
+  $('#scn').value=S.cur.id;drawStorms([]);setButtons();renderStory();renderProbes();renderJourney();
+  S.dirty=S.logDirty=true;setClock({simMin:0,clock:d.start});
+}
+function onReading(o){
+  S.outcomes.push(o);if(o.readingId)S.byReading[o.readingId]=o;
+  const d=S.devs[o.device];if(d){d.last=o.final==='PENDING'?'PROVISIONAL_ESCROW':o.final==='ACCEPT'?'ACCEPT':'QUARANTINE';d.fraud=d.fraud||o.fraud}
+  const c=S.cells[o.cell];if(c){c.recent.push(o.state);if(c.recent.length>10)c.recent.shift()}
+  if(o.state==='PROVISIONAL_ESCROW'&&o.readingId)S.pending[o.readingId]={cell:o.cell,at:o.simMin,device:o.device};
+  S.reasons[o.reason]=(S.reasons[o.reason]||0)+1;
+  S.dirty=S.logDirty=true;
+  if(!S.selOutcome||(S.autoSel&&(o.state!=='ACCEPT'||o.fraud)))selectOutcome(o,true);
+}
+function onEscrow(e){
+  const o=S.byReading[e.readingId];if(o){o.final=e.final;o.finalReason=e.reason;o.resolution=e.resolution}
+  delete S.pending[e.readingId];
+  const d=S.devs[e.device];if(d)d.last=e.final==='ACCEPT'?'ACCEPT':'QUARANTINE';
+  const c=S.cells[e.cell];
+  if(e.resolution==='H3_NEIGHBORS'&&c)animateLinks(e.cell,(c.neighbors||[]).filter(n=>S.cells[n]&&S.cells[n].devices>=3),'#4cc3ff');
+  else if(e.resolution==='RADAR'&&c)animateLinks(e.cell,[],'#a78bfa');
+  else if(e.resolution==='EXPIRED'&&c)animateLinks(e.cell,[],'#ff5a5f');
+  if(S.selOutcome&&S.selOutcome.readingId===e.readingId)renderJourney();
+  S.dirty=S.logDirty=true;
+}
+function setClock(d){
+  const t=new Date(d.clock);
+  const over=S.durationMin&&d.simMin>S.durationMin;
+  $('#clock').textContent='sim '+t.toISOString().slice(11,16)+' UTC · '+(over?'settling escrows (TTL 15 min)':'+'+Math.round(d.simMin)+' min'+(S.durationMin?' / '+Math.round(S.durationMin):''));
+}
+
+/* ---------- panels ---------- */
+function showScenario(id){S.cur=S.scns.find(s=>s.id===id);S.summary=null;renderStory();S.dirty=true}
+function renderStory(){
+  const s=S.cur;if(!s)return;
+  let h='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:16px">'+esc(s.title)+'</b>'+(s.limitation?'<span class="limit">DOCUMENTED LIMIT</span>':'')+'</div><div class="note" style="margin:2px 0 8px">'+esc(s.tagline)+'</div>'+
+  '<div class="story"><h4>What is happening</h4><p>'+esc(s.situation)+'</p><h4>Simple validators (static cap / radar-only / peer-only)</h4><p>'+esc(s.existing)+'</p><h4>VarunaSetu</h4><p>'+esc(s.varuna)+'</p></div>';
+  const r=S.summary;
+  if(r&&r.scenario===s.id){
+    h+='<div class="h4" style="margin-top:14px">Self-checks after the run</div><div class="checks">';
+    (r.checks||[]).forEach(c=>{h+='<div><span class="'+(c.pass?'p':'f')+'">'+(c.pass?'✔':'✘')+'</span><span>'+esc(c.name)+'<br><span class="note">'+esc(c.detail)+'</span></span></div>'});
+    if((r.probes||[]).length){const ok=r.probes.every(p=>p.pass);h+='<div><span class="'+(ok?'p':'f')+'">'+(ok?'✔':'✘')+'</span><span>API attack probes<br><span class="note">'+r.probes.filter(p=>p.pass).length+' of '+r.probes.length+' answered as documented</span></span></div>'}
+    h+='<div><span class="'+(r.ledger.verified?'p':'f')+'">'+(r.ledger.verified?'✔':'✘')+'</span><span>Audit ledger hash chain re-verified<br><span class="note">'+r.ledger.entries+' entries · head #'+r.ledger.headSeq+' · '+esc((r.ledger.headHash||'').slice(0,16))+'…</span></span></div></div>'+
+    '<div class="note" style="margin-top:8px">'+r.requests+' real HTTP requests in '+(r.wallMs/1000).toFixed(1)+' s.</div>';
+  }else h+='<div class="note" style="margin-top:14px">Duration '+Math.round(s.durationMin)+' simulated minutes. Press <b>Run</b>.</div>';
+  $('#storyBody').innerHTML=h;
+}
+const VN=[['STATIC_THRESHOLD','Static cap (R_obs ≤ 10 mm)'],['RADAR_ONLY','Radar-only bound'],['PEER_ONLY','Peer-only outlier test'],['VARUNASETU','VarunaSetu (live service)']];
+function score(){
+  const t={};VN.forEach(([k])=>t[k]={c:0,fa:0,ok:0,fr:0});
+  S.outcomes.forEach(o=>{
+    if(o.final==='PENDING')return;
+    const v=Object.assign({},o.baseline||{});v.VARUNASETU=o.final==='ACCEPT';
+    VN.forEach(([k])=>{const a=v[k],x=t[k];if(o.fraud){a?x.fa++:x.c++}else{a?x.ok++:x.fr++}});
+  });
+  return t;
+}
+function renderScore(){
+  const t=score();const np=Object.keys(S.pending).length;
+  let h='<div class="note" style="margin-bottom:8px">Every reading is judged against ground truth (the simulator knows which devices cheat). '+S.outcomes.length+' readings so far'+(np?', '+np+' still in escrow':'')+'.</div><table><thead><tr><th>validator</th><th>fraud caught</th><th>honest credited</th><th>balanced</th></tr></thead><tbody>';
+  VN.forEach(([k,lab])=>{const x=t[k];const f=x.c+x.fa,hh=x.ok+x.fr;const cr=f?x.c/f:null,ok=hh?x.ok/hh:null;
+    const bal=cr!=null&&ok!=null?(cr+ok)/2:(cr!=null?cr:(ok!=null?ok:0));
+    h+='<tr style="'+(k==='VARUNASETU'?'background:#13294a':'')+'"><td><b>'+lab+'</b></td><td>'+(f?x.c+'/'+f:'—')+'<div class="bar"><i style="width:'+((cr||0)*100)+'%"></i></div></td><td>'+(hh?x.ok+'/'+hh:'—')+'<div class="bar"><i style="width:'+((ok||0)*100)+'%"></i></div></td><td class="mono">'+(bal*100).toFixed(1)+'%<div class="bar v"><i style="width:'+(bal*100)+'%"></i></div></td></tr>'});
+  h+='</tbody></table>';
+  h+='<div class="h4" style="margin-top:14px">Reason codes returned by the API</div><table><tbody>';
+  Object.entries(S.reasons).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{h+='<tr><td class="mono">'+esc(k)+'</td><td>'+v+'</td></tr>'});
+  h+='</tbody></table>';
+  const res={RADAR:0,H3_NEIGHBORS:0,EXPIRED:0};S.outcomes.forEach(o=>{if(o.resolution&&res[o.resolution]!=null)res[o.resolution]++});
+  h+='<div class="h4" style="margin-top:14px">How escrows were settled</div><div class="grid2 mini"><div class="step good"><b>released by radar</b><div class="v">'+res.RADAR+'</div></div><div class="step good"><b>released by H3 neighbours</b><div class="v">'+res.H3_NEIGHBORS+'</div></div><div class="step bad"><b>expired uncorroborated</b><div class="v">'+res.EXPIRED+'</div></div><div class="step warn"><b>still pending</b><div class="v">'+np+'</div></div></div>';
+  h+='<div class="h4" style="margin-top:14px">Tamper-evident audit ledger</div><div class="note">Every reading and escrow resolution appends a SHA-256 hash-chained entry in the same transaction.</div><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button onclick="ledger(\'verify\')">Verify chain</button><button onclick="ledger(\'tamper\')">Tamper with one entry (admin)</button><button onclick="ledger(\'restore\')">Restore it</button></div><div id="ledOut" class="mono mini" style="margin-top:6px">'+(renderScore.led||'')+'</div>';
+  $('#scoreBody').innerHTML=h;
+}
+async function ledger(a){
+  let msg;
+  try{
+    if(a==='verify'){const r=await fetch('/sim/ledger/verify').then(r=>r.json());msg=r.verified?'<span style="color:var(--ok)">✔ chain intact</span> · '+r.entries+' entries · head #'+r.headSeq:'<span style="color:var(--bad)">✘ '+esc(r.error)+'</span>'}
+    else{const r=await fetch('/sim/ledger/'+a,{method:'POST'}).then(r=>r.json());msg=r.error?esc(r.error):(a==='tamper'?'entry #'+r.seq+' rewritten directly in the database. Now press Verify chain.':'restored')}
+  }catch(e){msg=esc(String(e))}
+  renderScore.led=msg;$('#ledOut').innerHTML=msg;
+}
+window.ledger=ledger;
+function renderLog(){
+  const f=S.logFilter;
+  const rows=S.outcomes.filter(o=>f==='all'||(f==='fraud'?o.fraud:f==='ERROR'?o.state==='ERROR':o.state===f));
+  const show=rows.slice(-120).reverse();
+  $('#logTbl tbody').innerHTML=show.map(o=>{const d=o.api.decision||{};
+    return '<tr class="row'+(S.selOutcome===o?' sel':'')+'" data-i="'+o.seq+'"><td class="mono">'+o.simMin.toFixed(1)+'</td><td class="mono">POST '+o.api.status+'</td><td class="mono" title="'+esc(o.device)+'">'+esc(short(o.device))+(o.fraud?' <span title="manipulated (ground truth)">✕</span>':'')+'</td><td><span class="tag t-'+(o.final==='PENDING'?'PENDING':o.state)+'">'+esc(o.reason.replace('RADAR_PHYSICS_FALLBACK_INSUFFICIENT_PEERS','RADAR_FALLBACK'))+'</span>'+(o.resolution?' <span class="note">→ '+o.resolution+'</span>':'')+'</td><td class="mono">'+fmt(d.RObsMM)+'</td><td class="mono">'+fmt(o.api.latencyMs,0)+'</td></tr>'}).join('');
+  $('#logCount').textContent=rows.length+' shown / '+S.outcomes.length;
+}
+$('#logTbl tbody').onclick=e=>{const tr=e.target.closest('tr');if(!tr)return;const o=S.outcomes.find(x=>x.seq==tr.dataset.i);if(o){S.autoSel=false;selectOutcome(o)}};
+function selectOutcome(o,auto){S.selOutcome=o;renderJourney();if(!auto)S.logDirty=true}
+function renderJourney(){
+  const o=S.selOutcome,box=$('#journey');
+  if(!o){box.innerHTML='<span class="note">Waiting for the first reading…</span>';return}
+  const d=o.api.decision||{},c=S.cells[o.cell]||{};
+  const ok=o.api.status>=200&&o.api.status<300,radarOk=d.RObsMM<=d.RMaxMM,fin=o.final;
+  const bl=o.baseline||{};
+  box.innerHTML='<div class="steps">'+
+   '<div class="step '+(ok?'good':'bad')+'"><b>1 · Signed & enrolled</b><div class="v">'+esc(o.device)+'<br>Ed25519 ✓<br>HTTP '+o.api.status+(o.api.existing?' (replay)':'')+'</div></div>'+
+   '<div class="step good"><b>2 · H3 cell</b><div class="v">'+esc(c.label||'')+'<br>'+esc(short(o.cell))+'<br>ring '+c.ring+' · '+c.devices+' devices</div></div>'+
+   '<div class="step '+(d.PeerCount>=4?'good':'warn')+'"><b>3 · Peers in cell</b><div class="v">n = '+(d.PeerCount==null?'—':d.PeerCount)+'<br>median '+fmt(d.PeerMedianMM)+' mm<br>MAD '+fmt(d.PeerMADMM)+' · z '+fmt(d.ZScore,1)+'</div></div>'+
+   '<div class="step '+(radarOk?'good':'bad')+'"><b>4 · Radar bound</b><div class="v">R_obs '+fmt(d.RObsMM)+' mm<br>R_max '+fmt(d.RMaxMM)+' mm<br>radar '+fmt(o.radarMm)+' mm</div></div>'+
+   '<div class="step '+(fin==='ACCEPT'?'good':fin==='PENDING'?'warn':'bad')+'"><b>5 · Verdict</b><div class="v"><span class="tag t-'+o.state+'">'+esc(o.state)+'</span><br>'+esc(o.reason)+(o.state==='PROVISIONAL_ESCROW'?'<br>→ <span class="tag t-'+fin+'">'+fin+'</span> '+esc(o.finalReason||'')+(o.resolution?'<br>via '+o.resolution:''):'')+'</div></div></div>'+
+  '<div class="mini" style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap"><span>Ground truth: <b class="'+(o.fraud?'':'hl')+'">'+(o.fraud?'MANIPULATED ('+esc(o.kind)+')':'honest')+'</b> · real rain '+fmt(o.truthMm)+' mm</span><span>Simple validators would say: '+
+   [['STATIC_THRESHOLD','static'],['RADAR_ONLY','radar'],['PEER_ONLY','peer']].map(([k,n])=>n+' <b style="color:'+(bl[k]?'var(--ok)':'var(--bad)')+'">'+(bl[k]?'accept':'reject')+'</b>').join(' · ')+'</span></div>';
+  $('#jHint').textContent='reading #'+o.seq;
+}
+function renderProbes(){
+  const list=S.probes.length?S.probes:((S.summary&&S.summary.probes)||[]);
+  if(!list.length){$('#probeBody').innerHTML='<span class="note">Run “Attacks on the door, not the data”.</span>';return}
+  let h='<div class="note" style="margin-bottom:8px">Each row is a real hostile or broken request to <span class="mono">POST /telemetry/readings</span>. “Numbers-only” = a validator that never checks identity would accept it.</div><table><thead><tr><th></th><th>attack</th><th>expected</th><th>got</th><th>numbers-only</th></tr></thead><tbody>';
+  list.forEach(p=>{h+='<tr><td style="color:var(--'+(p.pass?'ok':'bad')+')">'+(p.pass?'✔':'✘')+'</td><td><b>'+esc(p.title)+'</b><br><span class="note">'+esc(p.what)+'</span>'+(p.extra?'<br><span class="note mono">'+esc(p.extra)+'</span>':'')+'</td><td class="mono">'+p.expectStatus+(p.expectReason?'<br>'+esc(p.expectReason):'')+'</td><td class="mono">'+p.status+(p.reason?'<br>'+esc(p.reason):'')+'</td><td>'+(p.contentOnlyWouldAccept?'<span style="color:var(--bad)">would accept</span>':'—')+'</td></tr>'});
+  $('#probeBody').innerHTML=h+'</tbody></table>';
+}
+function renderAll(){
+  const rows=S.matrix;if(!rows.length)return;
+  const B=['STATIC_THRESHOLD','RADAR_ONLY','PEER_ONLY','VARUNASETU'];
+  let h='<div class="note" style="margin-bottom:8px">Balanced accuracy = mean of (fraud caught) and (honest readings credited). “—” = no data for that validator. Where a scenario contains no fraud, a validator that accepts everything scores 100% by construction, so read those rows for the false-reject cost. Rows marked <span class="limit">LIMIT</span> are documented limitations, shown on purpose.</div><table><thead><tr><th>scenario</th><th>Static</th><th>Radar</th><th>Peer</th><th>Varuna</th><th>checks</th></tr></thead><tbody>';
+  rows.forEach(r=>{const m={};(r.scoreboard||[]).forEach(x=>m[x.validator]=x);const s=S.scns.find(x=>x.id===r.scenario)||{};const best=Math.max.apply(null,B.map(b=>m[b]?Math.max(0,m[b].balanced):0));
+    h+='<tr><td><b>'+esc(r.title)+'</b> '+(s.limitation?'<span class="limit">LIMIT</span>':'')+'<br><span class="note">'+r.readings+' readings · '+r.requests+' requests</span></td>'+
+    B.map(b=>'<td class="mono" style="'+(b==='VARUNASETU'?'background:#13294a;':'')+(m[b]&&m[b].balanced===best&&best>0?'color:var(--ok);font-weight:700':'')+'">'+(m[b]&&(m[b].catchRate>=0||m[b].creditRate>=0)?(m[b].balanced*100).toFixed(1)+'%':'—')+'</td>').join('')+
+    '<td>'+(r.pass?'<span style="color:var(--ok)">✔ pass</span>':'<span style="color:var(--bad)">✘ fail</span>')+'<br><span class="note">'+(r.checks||[]).filter(c=>c.pass).length+'/'+(r.checks||[]).length+'</span></td></tr>'});
+  $('#allBody').innerHTML=h+'</tbody></table><div style="margin-top:10px"><a href="/sim/last">Download last run as JSON</a></div>';
+}
+
+/* ---------- cell inspector ---------- */
+async function inspect(id){
+  S.selCell=id;S.dirty=true;ringHighlight();
+  const c=S.cells[id];$('#cellId').textContent=c.label+' · '+short(id);
+  const box=$('#inspector');box.innerHTML='<span class="note">asking the service…</span>';
+  try{
+    const r=await fetch('/sim/cell/'+id).then(r=>r.json());
+    if(r.error){box.textContent=r.error;return}
+    const rows=r.neighbors.map(n=>{const lab=(S.cells[n.h3Index]||{}).label||short(n.h3Index)+' (outside city)';
+      return '<tr><td>'+esc(lab)+'</td><td class="mono">'+n.devices+'</td><td class="mono">'+fmt(n.medianMm)+'</td><td>'+(n.rains?'<span style="color:var(--ok)">raining ✔</span>':'<span class="note">no</span>')+'</td></tr>'}).join('');
+    const q=r.neighbors.filter(n=>n.rains).length;
+    box.innerHTML='<div class="mini"><b>'+esc(c.label)+'</b>: '+r.cell.devices+' devices reported in the last 10 min, median <b>'+fmt(r.cell.medianMm)+' mm</b> · <span class="note">'+c.devices+' installed · ring '+c.ring+'</span></div>'+
+    '<table style="margin-top:6px"><thead><tr><th>k=1 neighbour</th><th>devices</th><th>median mm</th><th>counts?</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div class="mini" style="margin-top:6px">Escrow rule: at least <b>'+r.needCells+'</b> neighbour cells each with ≥ <b>'+r.needDevices+'</b> devices and median ≥ <b>'+r.rainMm+' mm</b>. Now: '+q+' qualify → <b style="color:'+(r.ruleMet?'var(--ok)':'var(--warn)')+'">'+(r.ruleMet?'an escrow here would be released':'an escrow here would stay pending / expire')+'</b>.</div>';
+  }catch(e){box.textContent=String(e)}
+}
+
+/* ---------- controls ---------- */
+function setButtons(){
+  $('#run').disabled=S.running;$('#runall').disabled=S.running;$('#stop').disabled=!S.running;$('#pause').disabled=!S.running;$('#scn').disabled=S.running;
+  $('#pause').textContent=S.paused?'▶ Resume':'⏸ Pause';
+}
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});const j=await r.json().catch(()=>({}));if(!r.ok)toast(j.error||('HTTP '+r.status));return r.ok}
+function tab(name){const b=$$('#tabs button').find(x=>x.dataset.p===name);if(b)b.click()}
+$('#run').onclick=async()=>{S.running=true;setButtons();tab('story');if(!await post('/sim/run',{scenario:$('#scn').value,speed:+$('#speed').value})){S.running=false;setButtons()}};
+$('#runall').onclick=async()=>{S.running=true;S.matrix=[];setButtons();tab('all');if(!await post('/sim/run-all',{speed:0})){S.running=false;setButtons()}};
+$('#stop').onclick=()=>post('/sim/control',{action:'stop'});
+$('#pause').onclick=async()=>{S.paused=!S.paused;await post('/sim/control',{action:S.paused?'pause':'resume'});setButtons()};
+$('#speed').onchange=()=>post('/sim/control',{action:'speed',speed:+$('#speed').value});
+$$('#layer button').forEach(b=>b.onclick=()=>{$$('#layer button').forEach(x=>x.classList.remove('on'));b.classList.add('on');S.layer=b.dataset.l;S.dirty=true});
+$('#showTruth').onchange=()=>{S.dirty=true};$('#showRing').onchange=ringHighlight;
+$$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  $$('.pane').forEach(p=>{p.style.display='none'});$('#p-'+b.dataset.p).style.display=b.dataset.p==='log'?'flex':'block';S.logDirty=true});
+$$('#chips .chip').forEach(c=>c.onclick=()=>{$$('#chips .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');S.logFilter=c.dataset.f;S.logDirty=true});
+
+loadWorld().then(()=>{connect();requestAnimationFrame(pump)}).catch(e=>toast('Could not load: '+e));
+</script>
+</body>
+</html>

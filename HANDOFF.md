@@ -5,6 +5,74 @@ without re-reading the chat that produced it.
 
 ---
 
+## Entry 9 — 2026-11-10 — Virtual city: live demo against the real service
+
+### What was done
+
+- New `citysim/` package and `cmd/citysim`: a virtual Hyderabad of 37 real H3
+  cells (res 9) and 210 enrolled devices that sends Ed25519-signed readings to
+  the real `POST /telemetry/readings`. Only weather and clock are simulated
+  (`service.Config.Now` is the virtual clock; `Server.Sweep` is called per
+  simulated minute). `citysim serve` adds a self-contained judge UI (H3 map,
+  live API log, per-reading journey, neighbour-evidence inspector, scoreboards,
+  ledger verify/tamper demo); `citysim verify` runs everything headless and can
+  write `docs/DEMO_RESULTS.md`.
+- Twelve scripted scenarios with self-checks, three reference baselines
+  (Static, Radar-only, Peer-only) scored against ground truth labels, and four
+  scenarios that demonstrate documented limits on purpose.
+- Service fixes found by running real traffic (details in `docs/ERROR_LOG.md`):
+  durable H3 neighbour corroboration (`service/neighbors.go`, `Server.Sweep`),
+  422/409/404 instead of opaque 500s, quarantined claims no longer reserve
+  capacity, expiry worker uses the injectable clock, additive `readingId` /
+  `resolution` on `GET /escrows`, migration `003`.
+
+### Validation
+
+```text
+go test ./hydroledger/... ./ledger/... -count=1                   => PASS
+go test ./service -count=1   (PostgreSQL 16 + PostGIS 3.4)         => PASS (incl. 8 new tests)
+go test ./citysim -count=1   (same database)                       => PASS (12 scenarios + unit tests)
+go test -race ./hydroledger/... ./ledger/... ./service ./citysim   => PASS
+go run ./cmd/citysim verify -report docs/DEMO_RESULTS.md           => all scenarios passed
+UI smoke: page loaded in jsdom against the live server, scenario run end to end, no JS errors
+```
+
+Not run: Docker build of the `citysim` target / `demo` compose profile (no
+Docker daemon in this pass), a real-browser visual review (only an SVG
+rasterisation of the map and a jsdom run were inspected), dashboard tests.
+
+### ASSUMPTIONS
+
+- A1. Rain is spatially uniform inside an H3 cell and storms ramp over 40
+  minutes, so honest peers are coherent. Faster ramps reproduce the documented
+  rising-rain limit (scenario `abrupt-onset`). This is calibration of the
+  *world*, not of the verifier; verifier thresholds are untouched.
+- A2. Devices report only windows with at least 0.2 mm harvested (event-driven
+  telemetry). Reporting dry windows would make the first reporter of every
+  storm a certain peer outlier.
+- A3. Building `capacity_litres` (the service's reservable cap) is provisioned
+  at 40x tank volume; the service has no release path for consumed water, so a
+  small cap would fail honest long events with 409.
+- A4. Reference baselines are the project's own ablation definitions
+  (Static R_obs <= 10 mm; physics bound; robust z-score), not external products.
+
+### Remaining limitations (all reproduced by scenarios)
+
+- Device-supplied `radar_mm` is trusted; a server-side radar feed keyed by H3
+  cell is the fix.
+- Neighbour corroboration counts every neighbour reading regardless of its
+  verdict (same as the verifier), so a >=3-cell colluding cluster corroborates
+  itself; a staged claim next to real rain is credited.
+- Peers are other devices' *latest* readings within 10 minutes, which lags an
+  abrupt change of intensity and flags honest first reporters.
+- In the dry-radar transition band (reading > 2 mm, peer median still < 2 mm)
+  honest readings are rejected as `PHYSICAL_BOUND_EXCEEDED`.
+- Enrolment is still not an HTTP workflow; the harness writes device rows
+  directly. Ledger verification is client-side (harness / `/sim/ledger/verify`),
+  not a production server endpoint.
+
+---
+
 ## Entry 8 — 2026-11-07 — Live-only dashboard and audit-chain completion
 
 ### What was done

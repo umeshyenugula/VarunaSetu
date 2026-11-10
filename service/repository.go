@@ -16,6 +16,10 @@ import (
 var ErrNotFound = errors.New("service: not found")
 var ErrIdempotencyConflict = errors.New("service: idempotency key reused with different payload")
 
+// ErrCapacityReservation means the claim does not fit the building's
+// reservable capacity. It is a client-visible conflict, not a server fault.
+var ErrCapacityReservation = errors.New("service: capacity reservation failed")
+
 type Repository struct{ DB *sql.DB }
 
 // PublicKey resolves persisted device enrollment for signed telemetry.
@@ -103,8 +107,12 @@ func (r *Repository) StoreReading(ctx context.Context, deviceID, key string, ts 
 		}
 		return ReadingResult{}, fmt.Errorf("lock capacity: %w", err)
 	}
-	if t.StoredLitres > t.CapacityLitres || t.ClaimedLitres > t.CapacityLitres-t.StoredLitres || t.ClaimedLitres > available {
-		return ReadingResult{}, fmt.Errorf("capacity reservation failed")
+	// A QUARANTINEd claim is never credited, so it must not consume the
+	// building's reservable capacity: otherwise one rejected (or malicious)
+	// claim locks out every later honest reading of that building.
+	reserve := d.State != verifier.StateQuarantine
+	if t.StoredLitres > t.CapacityLitres || t.ClaimedLitres > t.CapacityLitres-t.StoredLitres || (reserve && t.ClaimedLitres > available) {
+		return ReadingResult{}, ErrCapacityReservation
 	}
 	var id string
 	var createdAt time.Time
@@ -112,12 +120,14 @@ func (r *Repository) StoreReading(ctx context.Context, deviceID, key string, ts 
 	if err != nil {
 		return ReadingResult{}, fmt.Errorf("insert reading: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE building SET reserved_litres=reserved_litres+$1, updated_at=now() WHERE id=$2`, t.ClaimedLitres, buildingID)
-	if err != nil {
-		return ReadingResult{}, fmt.Errorf("reserve capacity: %w", err)
-	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO ledger_entry (reading_id,amount_litres,entry_type) VALUES ($1,$2,'RESERVE')`, id, t.ClaimedLitres); err != nil {
-		return ReadingResult{}, fmt.Errorf("insert reservation ledger entry: %w", err)
+	if reserve {
+		_, err = tx.ExecContext(ctx, `UPDATE building SET reserved_litres=reserved_litres+$1, updated_at=now() WHERE id=$2`, t.ClaimedLitres, buildingID)
+		if err != nil {
+			return ReadingResult{}, fmt.Errorf("reserve capacity: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO ledger_entry (reading_id,amount_litres,entry_type) VALUES ($1,$2,'RESERVE')`, id, t.ClaimedLitres); err != nil {
+			return ReadingResult{}, fmt.Errorf("insert reservation ledger entry: %w", err)
+		}
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO verification_decision (reading_id,state,reason,r_obs_mm,r_max_mm,peer_count,peer_median_mm,peer_mad_mm,z_score) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, id, d.State, d.Reason, d.RObsMM, d.RMaxMM, d.PeerCount, d.PeerMedianMM, d.PeerMADMM, d.ZScore)
 	if err != nil {
@@ -480,7 +490,15 @@ func (r *Repository) ListEscrows(ctx context.Context, limit int) ([]EscrowView, 
 		limit = 100
 	}
 	rows, err := r.DB.QueryContext(ctx, `
-		SELECT er.id, tr.device_id, tr.h3_index, er.state, er.created_at, er.expires_at, er.corroborated_at
+		SELECT er.id, er.reading_id, tr.device_id, tr.h3_index, er.state, er.created_at, er.expires_at,
+		       er.corroborated_at, er.resolved_at,
+		       COALESCE((SELECT CASE
+		                  WHEN a.event_ref LIKE 'escrow_corroborated_h3:%' THEN 'H3_NEIGHBORS'
+		                  WHEN a.event_ref LIKE 'escrow_corroborated:%' THEN 'RADAR'
+		                  ELSE 'EXPIRED' END
+		                FROM audit_ledger_entry a
+		                WHERE a.event_ref IN ('escrow_corroborated:'||er.id, 'escrow_corroborated_h3:'||er.id, 'escrow_expired:'||er.id)
+		                LIMIT 1), '')
 		FROM escrow_record er
 		JOIN telemetry_reading tr ON tr.id = er.reading_id
 		ORDER BY er.created_at DESC, er.id DESC
@@ -492,7 +510,7 @@ func (r *Repository) ListEscrows(ctx context.Context, limit int) ([]EscrowView, 
 	var out []EscrowView
 	for rows.Next() {
 		var v EscrowView
-		if err := rows.Scan(&v.ID, &v.DeviceID, &v.H3Index, &v.State, &v.CreatedAt, &v.ExpiresAt, &v.CorroboratedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.ReadingID, &v.DeviceID, &v.H3Index, &v.State, &v.CreatedAt, &v.ExpiresAt, &v.CorroboratedAt, &v.ResolvedAt, &v.Resolution); err != nil {
 			return nil, err
 		}
 		out = append(out, v)

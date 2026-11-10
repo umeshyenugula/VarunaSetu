@@ -15,6 +15,7 @@ VarunaSetu is a physics-informed, spatially aware urban water intelligence proto
 | Allocation (research) | `alloc/` | Implemented/tested (NetworkX) |
 | Simulation/replay (research) | `sim/` | Implemented/tested Python harness |
 | Dashboard | `dashboard/` | Implemented/tested; live backend data only, with explicit API-unavailable errors |
+| Virtual city + live demo | `citysim/`, `cmd/citysim/` | Real signed traffic into the real service, 12 scenarios with self-checks, judge UI |
 | Ops | `Dockerfile`, `docker-compose.yml`, `.env.example` | Config validated; runtime smoke recommended |
 
 ## Quick start
@@ -24,6 +25,21 @@ cp .env.example .env
 docker compose up --build
 # optional dashboard: docker compose --profile ui up --build
 ```
+
+### Live demo for judges
+
+```bash
+export DATABASE_URL="postgres://USER:PASS@localhost:5432/DB?sslmode=disable"   # PostGIS
+go run ./cmd/citysim serve        # then open http://127.0.0.1:8080/
+go run ./cmd/citysim verify       # headless: run every scenario and check it
+```
+
+A virtual Hyderabad of 37 real H3 cells and 210 enrolled devices drives the
+**actual service** with signed telemetry; only weather and clock are simulated.
+It shows how H3 neighbourhoods separate a real storm from a staged claim, which
+cases simple validators get wrong, and which limits remain. See
+[`docs/DEMO.md`](docs/DEMO.md) (guide and talk track) and
+[`docs/DEMO_RESULTS.md`](docs/DEMO_RESULTS.md) (measured results).
 
 See [`docs/SETUP.md`](docs/SETUP.md), [`docs/TESTING.md`](docs/TESTING.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/INTEGRATION_AUDIT.md`](docs/INTEGRATION_AUDIT.md), [`docs/ERROR_LOG.md`](docs/ERROR_LOG.md), [`HANDOFF.md`](HANDOFF.md), and [`CONTRACTS.md`](CONTRACTS.md).
 
