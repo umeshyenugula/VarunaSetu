@@ -1,67 +1,148 @@
-import { useEffect, useMemo, useState } from 'react';
-import { advanceSimulation, initialSimulatorState } from './engine';
-import type { BuildingType, SensorType, SimulatorBuilding, SimulatorState } from './types';
+import { useEffect, useRef, useState } from 'react';
+import { backend, onApiCall, resolvedUrl, simulatorApi, submitSignedTelemetry, type ApiCall, type ProvisionDevice, type Verdict } from './api';
+import { expectedLitres, plan, STORIES, type Planned, type Story, type StoryId } from './story';
 
-const STORAGE_KEY = 'varunasetu-simulator-session';
-const buildingTypes: BuildingType[] = ['RESIDENTIAL', 'APARTMENT', 'COMMERCIAL', 'INDUSTRIAL', 'PUBLIC'];
-const sensorTypes: SensorType[] = ['RAIN_GAUGE', 'WATER_LEVEL', 'FLOW_METER'];
+type Status = 'idle' | 'active' | 'done' | 'error';
+type Row = { p: Planned; http?: number; verdict?: Verdict['decision']; error?: string };
 
-function readSession(): SimulatorState {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) as SimulatorState : initialSimulatorState();
-  } catch {
-    return initialSimulatorState();
+const CHAPTERS = [
+  { key: 'connect', title: 'Reach the backend', plain: 'The dashboard asks the API on port 8080 if it is alive.' },
+  { key: 'city', title: 'Set up the city', plain: 'Simulated buildings are enrolled with secret keys and placed on H3 map cells.' },
+  { key: 'rain', title: 'Rain falls', plain: 'Weather radar reports how many millimetres fell.' },
+  { key: 'report', title: 'Roofs report', plain: 'Each device signs its reading and sends it to the backend.' },
+  { key: 'verdict', title: 'Backend decides', plain: 'Radar, physics and neighbours are compared. Accept, hold or quarantine.' },
+  { key: 'record', title: 'It is recorded', plain: 'Decisions are stored and chained in the audit ledger.' },
+] as const;
+type Key = typeof CHAPTERS[number]['key'];
+
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const idle = (): Record<Key, Status> => ({ connect: 'idle', city: 'idle', rain: 'idle', report: 'idle', verdict: 'idle', record: 'idle' });
+const label: Record<string, string> = { ACCEPT: 'Accepted', PROVISIONAL_ESCROW: 'Held in escrow', QUARANTINE: 'Quarantined' };
+const cls: Record<string, string> = { ACCEPT: 'accept', PROVISIONAL_ESCROW: 'escrow', QUARANTINE: 'quarantine' };
+
+export default function Simulator() {
+  const [storyId, setStoryId] = useState<StoryId>('honest');
+  const [status, setStatus] = useState<Record<Key, Status>>(idle);
+  const [notes, setNotes] = useState<Partial<Record<Key, string>>>({});
+  const [rows, setRows] = useState<Row[]>([]);
+  const [calls, setCalls] = useState<ApiCall[]>([]);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState('');
+  const [outcome, setOutcome] = useState('');
+  const alive = useRef(true);
+  const story = STORIES.find((s) => s.id === storyId) as Story;
+
+  useEffect(() => { alive.current = true; const off = onApiCall((c) => setCalls((l) => [c, ...l].slice(0, 30))); return () => { alive.current = false; off(); }; }, []);
+
+  const mark = (key: Key, s: Status, note?: string) => {
+    setStatus((cur) => ({ ...cur, [key]: s }));
+    if (note !== undefined) setNotes((cur) => ({ ...cur, [key]: note }));
+  };
+
+  async function run() {
+    setRunning(true); setError(''); setOutcome(''); setRows([]); setStatus(idle()); setNotes({});
+    let current: Key = 'connect';
+    try {
+      mark('connect', 'active');
+      const t0 = performance.now();
+      await backend.health();
+      mark('connect', 'done', `Alive at ${resolvedUrl('/healthz')} (${Math.round(performance.now() - t0)} ms)`);
+
+      current = 'city'; mark('city', 'active');
+      const city = await simulatorApi.provision();
+      const devices: ProvisionDevice[] = city.devices;
+      if (!devices.length) throw new Error('The backend enrolled no devices.');
+      mark('city', 'done', `${devices.length} devices on ${city.cells.length} H3 cells. Earlier simulated readings were cleared.`);
+
+      current = 'rain'; mark('rain', 'active'); await pause(500);
+      const planned = plan(story, devices);
+      mark('rain', 'done', `Radar: ${story.radarMm} mm. ${story.plain}`);
+
+      current = 'report'; mark('report', 'active');
+      const out: Row[] = planned.map((p) => ({ p }));
+      setRows([...out]);
+      for (let i = 0; i < planned.length; i++) {
+        await pause(350);
+        try {
+          const res = await submitSignedTelemetry(planned[i].device, planned[i].payload);
+          out[i] = { ...out[i], http: 201, verdict: res.decision };
+        } catch (e) {
+          out[i] = { ...out[i], error: e instanceof Error ? e.message : String(e) };
+        }
+        if (!alive.current) return;
+        setRows([...out]);
+      }
+      mark('report', 'done', `${planned.length} signed readings sent to POST /telemetry/readings.`);
+
+      current = 'verdict'; mark('verdict', 'active'); await pause(400);
+      const got = out.filter((r) => r.verdict);
+      const count = (s: string) => got.filter((r) => r.verdict?.State === s).length;
+      const summary = `${count('ACCEPT')} accepted, ${count('PROVISIONAL_ESCROW')} held, ${count('QUARANTINE')} quarantined` + (got.length < out.length ? `, ${out.length - got.length} rejected by the API` : '');
+      mark('verdict', got.length ? 'done' : 'error', summary);
+      setOutcome(`${story.expect} Backend said: ${summary}.`);
+
+      current = 'record'; mark('record', 'active');
+      const stats = await backend.analytics();
+      const ledger = await backend.ledger().catch(() => null);
+      mark('record', 'done', `${stats.totalReadings} readings stored in total. Audit ledger entries: ${ledger ? ledger.length : 'unavailable'}.`);
+    } catch (e) {
+      mark(current, 'error');
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (alive.current) setRunning(false);
+    }
   }
+
+  return (
+    <div className="story">
+      <section className="panel">
+        <h2>1. Choose a story</h2>
+        <div className="segments" role="radiogroup" aria-label="Story">
+          {STORIES.map((s) => (
+            <button key={s.id} role="radio" aria-checked={s.id === storyId} className={s.id === storyId ? 'on' : ''} disabled={running} onClick={() => setStoryId(s.id)}>{s.title}</button>
+          ))}
+        </div>
+        <p className="lede">{story.plain}</p>
+        <p className="muted">Expected: {story.expect}</p>
+        <button className="primary" onClick={run} disabled={running}>{running ? 'Running…' : 'Run story'}</button>
+      </section>
+
+      {error && <div className="banner error" role="alert">{error}</div>}
+
+      <ol className="chapters">
+        {CHAPTERS.map((c, i) => (
+          <li key={c.key} className={`chapter ${status[c.key]}`}>
+            <span className="num">{i + 1}</span>
+            <div className="body">
+              <div className="head"><strong>{c.title}</strong><span className="state">{status[c.key] === 'idle' ? '' : status[c.key]}</span></div>
+              <p className="muted">{c.plain}</p>
+              {notes[c.key] && <p className="note">{notes[c.key]}</p>}
+              {c.key === 'report' && rows.length > 0 && <Readings rows={rows} radar={story.radarMm} />}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {outcome && <p className="outcome">{outcome}</p>}
+
+      <section className="panel">
+        <h2>Requests sent</h2>
+        <p className="muted">Every call the browser makes, with the exact address it went to.</p>
+        <table aria-label="Request log"><thead><tr><th>Method</th><th>URL</th><th>Status</th><th>ms</th></tr></thead>
+          <tbody>{calls.map((c, i) => <tr key={i} className={c.ok ? '' : 'bad'}><td className="mono">{c.method}</td><td className="mono">{c.url}</td><td>{c.status || 'no reply'}</td><td>{c.ms}</td></tr>)}</tbody></table>
+        {!calls.length && <p className="muted">Nothing sent yet.</p>}
+      </section>
+    </div>
+  );
 }
 
-export default function Simulator({ onBack }: { onBack: () => void }) {
-  const [state, setState] = useState<SimulatorState>(readSession);
-  const [selectedId, setSelectedId] = useState(state.buildings[0]?.id ?? '');
-  const [draggedSensor, setDraggedSensor] = useState<SensorType | null>(null);
-  const selected = state.buildings.find((building) => building.id === selectedId);
-
-  useEffect(() => {
-    if (!state.running) return;
-    const started = performance.now();
-    const timer = window.setInterval(() => {
-      const elapsed = (performance.now() - started) / 1000;
-      setState((current) => advanceSimulation(current, elapsed));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [state.running]);
-
-  const updateSelected = (patch: Partial<SimulatorBuilding>) => {
-    setState((current) => ({ ...current, buildings: current.buildings.map((building) => building.id === selectedId ? { ...building, ...patch } : building) }));
-  };
-  const addBuilding = () => {
-    const id = `BLD-${String(state.buildings.length + 1).padStart(3, '0')}`;
-    const building: SimulatorBuilding = { id, name: 'New building', type: 'RESIDENTIAL', x: 8, y: 4, roofAreaM2: 100, runoffCoefficient: 0.8, zoneId: 'A', hasPit: false, pitCapacityLitres: 0, hasTank: false, tankCapacityLitres: 0, storedLitres: 0 };
-    setState((current) => ({ ...current, buildings: [...current.buildings, building] }));
-    setSelectedId(id);
-  };
-  const dropSensor = (buildingId: string) => {
-    if (!draggedSensor) return;
-    if (draggedSensor === 'WATER_LEVEL' && !state.buildings.find((building) => building.id === buildingId)?.hasTank) return;
-    const id = `VS-${draggedSensor.slice(0, 4)}-${String(state.sensors.length + 1).padStart(3, '0')}`;
-    setState((current) => ({ ...current, sensors: [...current.sensors, { id, type: draggedSensor, buildingId, enabled: true, fault: 'NONE', intervalSeconds: 10 }] }));
-    setDraggedSensor(null);
-  };
-  const reset = () => { const next = initialSimulatorState(); setState(next); setSelectedId(next.buildings[0].id); };
-  const balanceRows = useMemo(() => [['Rainfall received', state.balance.rainfallLitres], ['Runoff generated', state.balance.runoffLitres], ['Captured in tanks', state.balance.capturedLitres], ['Overflow to drainage', state.balance.overflowLitres], ['Recharged', state.balance.rechargedLitres], ['Stored water', state.balance.storedLitres]], [state.balance]);
-
-  return <div className="simulator">
-    <header className="sim-header"><div><strong>VarunaSetu</strong><span className="sim-title">Urban Water Digital Twin</span></div><div className="sim-actions"><span className="badge sim">SIMULATED</span><button onClick={onBack}>Intelligence dashboard</button><button onClick={() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state))}>Save</button><button onClick={reset}>Reset</button></div></header>
-    <div className="sim-toolbar"><label>Rainfall <input type="number" min="0" max="200" value={state.rainfallMmPerHour} onChange={(event) => setState((current) => ({ ...current, rainfallMmPerHour: Math.max(0, Number(event.target.value)) }))} /> mm/hour</label><label>Speed <select value={state.speed} onChange={(event) => setState((current) => ({ ...current, speed: Number(event.target.value) }))}><option value="1">1x</option><option value="5">5x</option><option value="10">10x</option><option value="30">30x</option></select></label><button className="primary" onClick={() => setState((current) => ({ ...current, running: !current.running }))}>{state.running ? 'Pause rainfall' : 'Start rainfall'}</button><span className="sim-clock">{state.simulationHours.toFixed(3)} simulated hours</span></div>
-    <main className="sim-layout">
-      <aside className="sim-panel"><h2>Sensor toolbox</h2><p className="section-note">Drag a sensor onto a valid building. Water-level sensors require a tank.</p>{sensorTypes.map((type) => <div key={type} className="tool-item" draggable onDragStart={() => setDraggedSensor(type)}>{type.replace('_', ' ')}</div>)}<h2>Neighbourhood</h2><button onClick={addBuilding}>+ Add building</button>{state.buildings.map((building) => <button key={building.id} className={`object-item ${selectedId === building.id ? 'selected' : ''}`} onClick={() => setSelectedId(building.id)}>{building.name}<small>{building.type}</small></button>)}</aside>
-      <section className="sim-canvas"><div className="sim-grid">{state.buildings.map((building) => <BuildingTile key={building.id} building={building} selected={selectedId === building.id} sensorCount={state.sensors.filter((sensor) => sensor.buildingId === building.id).length} onSelect={() => setSelectedId(building.id)} onDrop={() => dropSensor(building.id)} />)}</div><div className="sim-legend"><span>Blue: verified-capable</span><span>Yellow: simulated telemetry</span><span>Grey: uninstrumented</span></div></section>
-      <aside className="sim-panel"><h2>Selection</h2>{selected ? <><label>Name<input value={selected.name} onChange={(event) => updateSelected({ name: event.target.value })} /></label><label>Type<select value={selected.type} onChange={(event) => updateSelected({ type: event.target.value as BuildingType })}>{buildingTypes.map((type) => <option key={type}>{type}</option>)}</select></label><label>Roof area<input type="number" min="1" value={selected.roofAreaM2} onChange={(event) => updateSelected({ roofAreaM2: Number(event.target.value) })} /></label><label>Runoff coefficient<input type="number" min="0" max="1" step="0.05" value={selected.runoffCoefficient} onChange={(event) => updateSelected({ runoffCoefficient: Number(event.target.value) })} /></label><label><input type="checkbox" checked={selected.hasTank} onChange={(event) => updateSelected({ hasTank: event.target.checked })} /> Storage tank</label>{selected.hasTank && <label>Tank capacity (L)<input type="number" min="1" value={selected.tankCapacityLitres} onChange={(event) => updateSelected({ tankCapacityLitres: Number(event.target.value) })} /></label>}<label><input type="checkbox" checked={selected.hasPit} onChange={(event) => updateSelected({ hasPit: event.target.checked })} /> Recharge pit</label><h2>Attached devices</h2>{state.sensors.filter((sensor) => sensor.buildingId === selected.id).map((sensor) => <div className="sensor-row" key={sensor.id}><span>{sensor.id}<small>{sensor.type}</small></span><select value={sensor.fault} onChange={(event) => setState((current) => ({ ...current, sensors: current.sensors.map((item) => item.id === sensor.id ? { ...item, fault: event.target.value as typeof item.fault } : item) }))}><option>NONE</option><option>NOISE</option><option>STUCK</option><option>DISCONNECTED</option><option>IMPOSSIBLE</option></select></div>)}</> : <p className="muted">Select a building.</p>}<h2>Water balance</h2>{balanceRows.map(([label, value]) => <div className="balance-row" key={label}><span>{label}</span><strong>{Number(value).toFixed(1)} L</strong></div>)}<p className="section-note">Runoff uses V = rainfall depth × roof area × runoff coefficient. Estimated runoff is kept separate from captured and stored water.</p></aside>
-    </main>
-    <footer className="sim-events"><strong>Event stream</strong>{state.events.slice(0, 3).map((event, index) => <span key={`${event}-${index}`}>{event}</span>)}<span className="muted">Backend transmission is intentionally gated by the existing signed-device enrollment contract.</span></footer>
-  </div>;
-}
-
-function BuildingTile({ building, selected, sensorCount, onSelect, onDrop }: { building: SimulatorBuilding; selected: boolean; sensorCount: number; onSelect: () => void; onDrop: () => void }) {
-  return <button className={`building-tile type-${building.type.toLowerCase()} ${selected ? 'selected' : ''}`} style={{ left: `${building.x * 8}%`, top: `${building.y * 13}%` }} onClick={onSelect} onDragOver={(event) => event.preventDefault()} onDrop={onDrop} title={`${building.name} - drop a sensor here`}><span className="building-roof" /><strong>{building.name}</strong><small>{building.roofAreaM2} m² roof</small>{sensorCount > 0 && <em>{sensorCount} sensor{sensorCount > 1 ? 's' : ''}</em>}</button>;
+function Readings({ rows, radar }: { rows: Row[]; radar: number }) {
+  return <table aria-label="Device readings"><thead><tr><th>Device</th><th>Claim</th><th>Fair claim at {radar} mm</th><th>Verdict</th><th>Reason</th></tr></thead><tbody>
+    {rows.map((r) => <tr key={r.p.device.deviceId}>
+      <td className="mono">{r.p.device.deviceId}</td>
+      <td>{r.p.payload.claimed_litres.toLocaleString()} L{r.p.suspicious ? ' ⚑' : ''}</td>
+      <td>{Math.round(expectedLitres(radar, r.p.device)).toLocaleString()} L</td>
+      <td>{r.verdict ? <span className={`badge ${cls[r.verdict.State]}`}>{label[r.verdict.State]}</span> : r.error ? <span className="badge quarantine">Rejected</span> : '…'}</td>
+      <td className="mono">{r.verdict?.Reason ?? r.error ?? ''}</td></tr>)}
+  </tbody></table>;
 }

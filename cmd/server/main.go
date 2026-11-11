@@ -64,6 +64,7 @@ func main() {
 		Repository:      repo,
 		Logger:          logger,
 		CORSAllowOrigin: os.Getenv("CORS_ALLOW_ORIGIN"),
+		Simulator:       service.SimulatorConfig{Enabled: os.Getenv("SIMULATOR_ENABLED") == "true"},
 	})
 	if err != nil {
 		logger.Error("service init failed", "error", err)

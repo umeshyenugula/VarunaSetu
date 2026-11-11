@@ -1,12 +1,8 @@
 import type { AnalyticsSummary, CellState, EscrowRecord, LedgerEntryView, TelemetryReading } from '../types';
 
-function base(): string {
-  const value = import.meta.env.VITE_API_BASE?.trim().replace(/\/$/, '');
-  if (!value) {
-    throw new Error('VITE_API_BASE is required');
-  }
-  return value;
-}
+import { apiBase } from '../config';
+
+const base = apiBase;
 
 async function fetchJSON<T>(path: string): Promise<T> {
   const response = await fetch(`${base()}${path}`, {

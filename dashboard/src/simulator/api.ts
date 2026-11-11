@@ -1,22 +1,55 @@
 import { signTelemetry, randomNonce, type SignedTelemetryEnvelope } from './crypto';
 
-function base(): string {
-  const value = import.meta.env.VITE_API_BASE?.trim().replace(/\/$/, '');
-  if (!value) throw new Error('VITE_API_BASE is required');
-  return value;
+import { apiBase } from '../config';
+
+export type ApiCall = { at: number; method: string; url: string; status: number; ms: number; ok: boolean };
+const listeners = new Set<(call: ApiCall) => void>();
+/** Subscribe to every request the story makes (used by the on-screen request log). */
+export function onApiCall(fn: (call: ApiCall) => void): () => void {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+}
+
+/** Absolute URL a path will be requested from, so the real target is always visible. */
+export function resolvedUrl(path: string): string {
+  const url = `${apiBase()}${path}`;
+  return /^https?:/.test(url) ? url : `${window.location.origin}${url}`;
 }
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${base()}${path}`, {
-    ...init,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  const method = init?.method ?? 'GET';
+  const started = performance.now();
+  const emit = (status: number, ok: boolean) => listeners.forEach((fn) => fn({ at: Date.now(), method, url: resolvedUrl(path), status, ms: Math.round(performance.now() - started), ok }));
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase()}${path}`, {
+      ...init,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    });
+  } catch {
+    emit(0, false);
+    throw new Error(`Cannot reach ${resolvedUrl(path)}. Is the backend running on port 8080?`);
+  }
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!res.ok) throw new Error(typeof data?.error === 'string' ? `${data.error} (HTTP ${res.status})` : `${path} returned HTTP ${res.status}`);
+  emit(res.status, res.ok);
+  if (!res.ok) throw new Error(typeof data?.error === 'string' ? `${data.error} (HTTP ${res.status})` : `${method} ${path} returned HTTP ${res.status}`);
   return data as T;
 }
+
+export type Health = { status?: string };
+export const backend = {
+  health: () => json<Health>('/healthz'),
+  analytics: () => json<{ totalReadings: number; accepted: number; provisional: number; quarantined: number }>('/analytics/summary'),
+  ledger: () => json<unknown[] | null>('/ledger/entries?limit=500'),
+  escrows: () => json<unknown[] | null>('/escrows?limit=500'),
+};
+
+export type Verdict = {
+  id: string;
+  decision: { State: 'ACCEPT' | 'PROVISIONAL_ESCROW' | 'QUARANTINE'; Reason: string; RObsMM: number; RMaxMM: number; PeerCount: number };
+};
 
 export type ProvisionDevice = {
   deviceId: string; buildingId: string; h3Index: string;
@@ -53,7 +86,7 @@ export type TelemetryPayload = {
   h3_index: string;
 };
 
-export async function submitSignedTelemetry(device: ProvisionDevice, payload: TelemetryPayload, at = new Date()): Promise<any> {
+export async function submitSignedTelemetry(device: ProvisionDevice, payload: TelemetryPayload, at = new Date()): Promise<Verdict> {
   const envelope: SignedTelemetryEnvelope = await signTelemetry({
     deviceId: device.deviceId,
     privateSeedBase64: device.privateSeedBase64,
@@ -61,5 +94,5 @@ export async function submitSignedTelemetry(device: ProvisionDevice, payload: Te
     nonce: randomNonce(),
     payload: payload as any,
   });
-  return json<any>('/telemetry/readings', { method: 'POST', body: JSON.stringify(envelope) });
+  return json<Verdict>('/telemetry/readings', { method: 'POST', body: JSON.stringify(envelope) });
 }

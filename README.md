@@ -30,7 +30,7 @@ docker compose up --build
 
 ```bash
 export DATABASE_URL="postgres://USER:PASS@localhost:5432/DB?sslmode=disable"   # PostGIS
-go run ./cmd/citysim serve        # then open http://127.0.0.1:8080/
+go run ./cmd/citysim serve        # then open http://127.0.0.1:8090/
 go run ./cmd/citysim verify       # headless: run every scenario and check it
 ```
 

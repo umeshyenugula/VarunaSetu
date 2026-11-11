@@ -5,6 +5,8 @@ import 'leaflet/dist/leaflet.css';
 import { getAnalytics, listCells, listEscrows, listLedger, listReadings } from './api/client';
 import type { AnalyticsSummary, CellState, DecisionState, EscrowRecord, LedgerEntryView, TelemetryReading } from './types';
 import Simulator from './simulator/Simulator';
+import { backend } from './simulator/api';
+import { apiBase } from './config';
 
 function stateBadge(state: DecisionState | string) {
   const cls = state === 'ACCEPT' ? 'accept' : state === 'PROVISIONAL_ESCROW' ? 'escrow' : state === 'QUARANTINE' ? 'quarantine' : '';
@@ -32,7 +34,7 @@ function useCountdown(target?: string) {
 }
 
 export default function App() {
-  const [view, setView] = useState(() => window.location.hash === '#simulator' ? 'simulator' : 'dashboard');
+  const [view, setView] = useState<'story' | 'operations'>(() => window.location.hash === '#operations' ? 'operations' : 'story');
   const [readings, setReadings] = useState<TelemetryReading[]>([]);
   const [escrows, setEscrows] = useState<EscrowRecord[]>([]);
   const [ledger, setLedger] = useState<LedgerEntryView[]>([]);
@@ -61,23 +63,25 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
-  if (view === 'simulator') return <Simulator onBack={() => { window.location.hash = ''; setView('dashboard'); }} />;
+  const go = (next: 'story' | 'operations') => { window.location.hash = next === 'story' ? '' : next; setView(next); };
 
   return (
     <div className="app">
       <header className="header">
-        <div>
-          <h1>HydroLedger Dashboard</h1>
-          <p>Operational telemetry verification, escrow workflow, spatial status, and audit records.</p>
-        </div>
-        <div className="header-actions"><span className="badge">LIVE DATABASE</span><button onClick={() => { window.location.hash = 'simulator'; setView('simulator'); }}>Open urban simulator</button></div>
+        <div className="brand"><strong>VarunaSetu</strong><span>Urban water verification</span></div>
+        <nav className="tabs" aria-label="Views">
+          <button className={view === 'story' ? 'on' : ''} onClick={() => go('story')}>Story</button>
+          <button className={view === 'operations' ? 'on' : ''} onClick={() => go('operations')}>Operations</button>
+        </nav>
+        <ApiChip />
       </header>
 
+      {view === 'story' ? <Simulator /> : <>
       {error && <div className="banner error" role="alert">Live data unavailable: {error}. Configure the API and database before using this dashboard.</div>}
       {loading && <div className="banner" role="status">Loading live data…</div>}
 
       <section className="card" style={{ marginBottom: 16 }}>
-        <h2>System analytics</h2>
+        <h2>System analytics <span className="badge">LIVE DATABASE</span></h2>
         <p className="section-note">Metrics are calculated by the backend from persisted telemetry and escrow records.</p>
         <div className="metrics">
           <Metric label="Total telemetry readings" value={analytics?.totalReadings ?? '—'} />
@@ -117,8 +121,17 @@ export default function App() {
         <p className="section-note">Entries are shown only when the backend ledger projection is available. Cryptographic verification remains a server-side responsibility.</p>
         <LedgerTable entries={ledger} />
       </section>
+      </>}
     </div>
   );
+}
+
+function ApiChip() {
+  const [state, setState] = useState<'checking' | 'up' | 'down'>('checking');
+  useEffect(() => { let on = true; backend.health().then(() => on && setState('up')).catch(() => on && setState('down')); return () => { on = false; }; }, []);
+  const base = apiBase();
+  const target = base.startsWith('/') ? `${base} → ${import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8080'}` : base;
+  return <span className={`chip ${state}`} title="Where API requests are sent">API {target} · {state === 'up' ? 'connected' : state === 'down' ? 'unreachable' : 'checking'}</span>;
 }
 
 function Metric({ label, value }: { label: string; value: number | string }) {
@@ -165,7 +178,7 @@ function H3Map({ cells, readings }: { cells: CellState[]; readings: TelemetryRea
           let positions: [number, number][] = [];
           try { positions = cellToBoundary(cell.h3Index).map(([lat, lng]) => [lat, lng]); } catch { return null; }
           const related = readings.filter((reading) => reading.h3Index === cell.h3Index).slice(0, 3);
-          return <Polygon key={cell.h3Index} positions={positions} pathOptions={{ color: color(cell.state), fillColor: color(cell.state), fillOpacity: 0.35, weight: 2 }}>
+          return <Polygon key={cell.h3Index} positions={positions} pathOptions={{ color: color(cell.state), fillColor: color(cell.state), fillOpacity: 0.25, weight: 1 }}>
             <Popup><strong className="mono">{cell.h3Index}</strong><br />State: {cell.state}<br />Readings: {cell.readings}{related.map((reading) => <div key={reading.id}>{reading.deviceId}: {reading.decision} ({reading.reason})</div>)}</Popup>
           </Polygon>;
         })}

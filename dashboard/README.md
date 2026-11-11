@@ -39,17 +39,11 @@ Includes component tests, API success/error-state integration tests, map renderi
 
 ## API integration
 
-The dashboard attempts to use `VITE_API_BASE` when configured:
+Requests go to `/api/*`, which the dev server proxies to the backend on
+`http://localhost:8080` (override with `VITE_PROXY_TARGET`). Set `VITE_API_BASE`
+(e.g. `http://localhost:8080`) to bypass the proxy; the API then needs CORS enabled.
+Copy `.env.example` to `.env` to change either. Port 8090 is the standalone citysim
+demo and is never used by the dashboard.
 
-```bash
-# example
-VITE_API_BASE=http://localhost:8080 npm run dev
-```
-
-The dashboard does not fall back to fixtures or fabricate values. If the API is
-unavailable, it shows an explicit error and empty operational state.
-
-The backend currently exposes persisted readings, escrows, cell summaries,
-analytics, and a ledger projection. Cryptographic ledger verification requires
-an authoritative verification endpoint; the dashboard does not claim to verify
-hashes in the browser.
+The dashboard does not fall back to fixtures. If the API is unavailable it shows an
+explicit error, and the header chip shows the target and `unreachable`.

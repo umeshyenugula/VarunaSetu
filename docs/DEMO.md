@@ -23,7 +23,7 @@ docker compose --profile demo up --build citysim db
 
 # Option B: your own PostGIS
 export DATABASE_URL="postgres://USER:PASS@localhost:5432/DB?sslmode=disable"
-go run ./cmd/citysim serve            # open http://127.0.0.1:8080/
+go run ./cmd/citysim serve            # open http://127.0.0.1:8090/
 
 # Option C: no browser, check every scenario and write the results report
 go run ./cmd/citysim verify -report docs/DEMO_RESULTS.md
@@ -197,10 +197,10 @@ neighbour evidence; device reputation across events.
 While a run is in progress (or after):
 
 ```bash
-curl -s localhost:8080/analytics/summary | jq
-curl -s 'localhost:8080/escrows?limit=5' | jq     # readingId, resolution: RADAR | H3_NEIGHBORS | EXPIRED
-curl -s 'localhost:8080/ledger/entries?limit=5' | jq
-curl -s localhost:8080/sim/ledger/verify | jq     # re-computes the hash chain
+curl -s localhost:8090/analytics/summary | jq
+curl -s 'localhost:8090/escrows?limit=5' | jq     # readingId, resolution: RADAR | H3_NEIGHBORS | EXPIRED
+curl -s 'localhost:8090/ledger/entries?limit=5' | jq
+curl -s localhost:8090/sim/ledger/verify | jq     # re-computes the hash chain
 ```
 
 Reproduce the numbers and the report:

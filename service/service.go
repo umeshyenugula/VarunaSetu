@@ -40,6 +40,7 @@ type Config struct {
 	// neighbouring cells (0 selects spatial.DefaultK; a negative value turns
 	// neighbour corroboration off).
 	NeighborK int
+	Simulator SimulatorConfig
 }
 
 type Server struct {
@@ -98,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /analytics/summary", s.getAnalytics)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("OPTIONS /", s.optionsOK)
+	s.registerSimulatorRoutes(mux)
 	var h http.Handler = mux
 	if s.cfg.CORSAllowOrigin != "" {
 		h = corsMiddleware(s.cfg.CORSAllowOrigin, h)

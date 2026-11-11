@@ -25,7 +25,7 @@ func main() {
 	cmd := os.Args[1]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	db := fs.String("db", os.Getenv("DATABASE_URL"), "PostgreSQL/PostGIS connection URL (default $DATABASE_URL)")
-	addr := fs.String("addr", "127.0.0.1:8080", "listen address of the service (and UI)")
+	addr := fs.String("addr", "127.0.0.1:8090", "listen address of the demo service (and UI); 8080 is reserved for cmd/server")
 	only := fs.String("only", "", "verify: comma-separated scenario ids")
 	out := fs.String("out", "", "verify: write the full JSON report to this file")
 	report := fs.String("report", "", "verify: write a Markdown results report to this file")

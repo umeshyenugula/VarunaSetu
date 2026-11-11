@@ -15,6 +15,7 @@ vi.mock('./api/client');
 const mocked = vi.mocked({ getAnalytics, listCells, listEscrows, listLedger, listReadings });
 
 beforeEach(() => {
+  window.location.hash = '#operations';
   mocked.listReadings.mockResolvedValue([{
     id: 'r1', deviceId: 'device-1', timestamp: '2026-01-01T00:00:00Z',
     h3Index: '8928308280fffff', rainfallMm: 4, radarRainfallMm: 4,
@@ -30,6 +31,12 @@ beforeEach(() => {
 });
 
 describe('HydroLedger dashboard', () => {
+  it('opens on the story view', async () => {
+    window.location.hash = '';
+    render(<App />);
+    expect(await screen.findByText('Run story')).toBeInTheDocument();
+  });
+
   it('renders live analytics and map data', async () => {
     render(<App />);
     expect(await screen.findByText('Total telemetry readings')).toBeInTheDocument();
