@@ -15,7 +15,7 @@ vi.mock('./api/client');
 const mocked = vi.mocked({ getAnalytics, listCells, listEscrows, listLedger, listReadings });
 
 beforeEach(() => {
-  window.location.hash = '#operations';
+  window.location.hash = '#/overview';
   mocked.listReadings.mockResolvedValue([{
     id: 'r1', deviceId: 'device-1', timestamp: '2026-01-01T00:00:00Z',
     h3Index: '8928308280fffff', rainfallMm: 4, radarRainfallMm: 4,
@@ -41,8 +41,17 @@ describe('HydroLedger dashboard', () => {
     render(<App />);
     expect(await screen.findByText('Total telemetry readings')).toBeInTheDocument();
     expect(screen.getByText('LIVE DATABASE')).toBeInTheDocument();
-    expect(screen.getByTestId('map')).toBeInTheDocument();
+    window.location.hash = '#/map';
+    expect(await screen.findByTestId('map')).toBeInTheDocument();
     expect(screen.getByTestId('polygon')).toBeInTheDocument();
+  });
+
+  it('keeps the same navigation and page header on every screen', async () => {
+    render(<App />);
+    for (const label of ['Story', 'Overview', 'Map', 'Readings', 'Escrows', 'Ledger']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument();
   });
 
   it('shows an explicit backend error instead of static fixture data', async () => {

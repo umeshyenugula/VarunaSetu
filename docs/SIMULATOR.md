@@ -1,7 +1,10 @@
 # Story simulator
 
-Open the dashboard (`cd dashboard && npm run dev`, http://localhost:5173). The
-**Story** tab is the default view; **Operations** holds the live tables, map and ledger.
+Open the dashboard (`cd dashboard && npm run dev`, http://localhost:5173). A left
+sidebar holds every screen: **Story** (simulation) and **Overview, Map, Readings,
+Escrows, Ledger** (monitoring). All screens share one layout: page header, bordered
+cards, the same tables, badges and empty/error states. Monitoring screens reload
+from the backend each time they are opened.
 
 A story runs six steps in order, and every step calls the real backend on **port 8080**:
 

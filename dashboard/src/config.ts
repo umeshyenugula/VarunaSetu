@@ -10,3 +10,11 @@ export function apiBase(): string {
   const value = import.meta.env.VITE_API_BASE?.trim().replace(/\/+$/, '');
   return value || '/api';
 }
+
+/** The backend address a request path really reaches (the proxy target when base is "/api"). */
+export function backendUrl(path = ''): string {
+  const base = apiBase();
+  if (!base.startsWith('/')) return `${base}${path}`;
+  const target = (import.meta.env.VITE_PROXY_TARGET?.trim() || 'http://localhost:8080').replace(/\/+$/, '');
+  return `${target}${path}`;
+}

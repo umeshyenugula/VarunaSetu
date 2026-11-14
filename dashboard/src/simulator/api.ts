@@ -1,8 +1,8 @@
 import { signTelemetry, randomNonce, type SignedTelemetryEnvelope } from './crypto';
 
-import { apiBase } from '../config';
+import { apiBase, backendUrl } from '../config';
 
-export type ApiCall = { at: number; method: string; url: string; status: number; ms: number; ok: boolean };
+export type ApiCall = { at: number; method: string; url: string; via?: string; status: number; ms: number; ok: boolean };
 const listeners = new Set<(call: ApiCall) => void>();
 /** Subscribe to every request the story makes (used by the on-screen request log). */
 export function onApiCall(fn: (call: ApiCall) => void): () => void {
@@ -12,6 +12,11 @@ export function onApiCall(fn: (call: ApiCall) => void): () => void {
 
 /** Absolute URL a path will be requested from, so the real target is always visible. */
 export function resolvedUrl(path: string): string {
+  return backendUrl(path);
+}
+
+/** What the browser itself requests: same-origin "/api/..." when proxied, otherwise the backend URL. */
+function browserUrl(path: string): string {
   const url = `${apiBase()}${path}`;
   return /^https?:/.test(url) ? url : `${window.location.origin}${url}`;
 }
@@ -19,7 +24,7 @@ export function resolvedUrl(path: string): string {
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? 'GET';
   const started = performance.now();
-  const emit = (status: number, ok: boolean) => listeners.forEach((fn) => fn({ at: Date.now(), method, url: resolvedUrl(path), status, ms: Math.round(performance.now() - started), ok }));
+  const emit = (status: number, ok: boolean) => listeners.forEach((fn) => fn({ at: Date.now(), method, url: resolvedUrl(path), via: browserUrl(path) !== resolvedUrl(path) ? browserUrl(path) : undefined, status, ms: Math.round(performance.now() - started), ok }));
   let res: Response;
   try {
     res = await fetch(`${apiBase()}${path}`, {

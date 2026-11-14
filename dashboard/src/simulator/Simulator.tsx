@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { backend, onApiCall, resolvedUrl, simulatorApi, submitSignedTelemetry, type ApiCall, type ProvisionDevice, type Verdict } from './api';
+import { Badge, Button, Card, Empty, TableWrap } from '../ui';
 import { expectedLitres, plan, STORIES, type Planned, type Story, type StoryId } from './story';
 
 type Status = 'idle' | 'active' | 'done' | 'error';
@@ -17,8 +18,6 @@ type Key = typeof CHAPTERS[number]['key'];
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const idle = (): Record<Key, Status> => ({ connect: 'idle', city: 'idle', rain: 'idle', report: 'idle', verdict: 'idle', record: 'idle' });
-const label: Record<string, string> = { ACCEPT: 'Accepted', PROVISIONAL_ESCROW: 'Held in escrow', QUARANTINE: 'Quarantined' };
-const cls: Record<string, string> = { ACCEPT: 'accept', PROVISIONAL_ESCROW: 'escrow', QUARANTINE: 'quarantine' };
 
 export default function Simulator() {
   const [storyId, setStoryId] = useState<StoryId>('honest');
@@ -52,7 +51,7 @@ export default function Simulator() {
       const city = await simulatorApi.provision();
       const devices: ProvisionDevice[] = city.devices;
       if (!devices.length) throw new Error('The backend enrolled no devices.');
-      mark('city', 'done', `${devices.length} devices on ${city.cells.length} H3 cells. Earlier simulated readings were cleared.`);
+      mark('city', 'done', `${devices.length} new devices on ${city.cells.length} H3 cells. Earlier signed readings remain immutable.`);
 
       current = 'rain'; mark('rain', 'active'); await pause(500);
       const planned = plan(story, devices);
@@ -93,56 +92,57 @@ export default function Simulator() {
     }
   }
 
+  const doneCount = CHAPTERS.filter((c) => status[c.key] === 'done').length;
   return (
-    <div className="story">
-      <section className="panel">
-        <h2>1. Choose a story</h2>
+    <>
+      <Card title="Scenario" note="Pick what happens, then run it. Nothing is faked: the backend returns every verdict.">
         <div className="segments" role="radiogroup" aria-label="Story">
           {STORIES.map((s) => (
             <button key={s.id} role="radio" aria-checked={s.id === storyId} className={s.id === storyId ? 'on' : ''} disabled={running} onClick={() => setStoryId(s.id)}>{s.title}</button>
           ))}
         </div>
         <p className="lede">{story.plain}</p>
-        <p className="muted">Expected: {story.expect}</p>
-        <button className="primary" onClick={run} disabled={running}>{running ? 'Running…' : 'Run story'}</button>
-      </section>
+        <p className="muted">Expected outcome: {story.expect}</p>
+        <Button variant="primary" onClick={run} disabled={running}>{running ? 'Running…' : 'Run story'}</Button>
+      </Card>
 
       {error && <div className="banner error" role="alert">{error}</div>}
 
-      <ol className="chapters">
-        {CHAPTERS.map((c, i) => (
-          <li key={c.key} className={`chapter ${status[c.key]}`}>
-            <span className="num">{i + 1}</span>
-            <div className="body">
-              <div className="head"><strong>{c.title}</strong><span className="state">{status[c.key] === 'idle' ? '' : status[c.key]}</span></div>
-              <p className="muted">{c.plain}</p>
-              {notes[c.key] && <p className="note">{notes[c.key]}</p>}
-              {c.key === 'report' && rows.length > 0 && <Readings rows={rows} radar={story.radarMm} />}
-            </div>
-          </li>
-        ))}
-      </ol>
+      <Card title="Sequence" note={`${doneCount} of ${CHAPTERS.length} steps complete`}>
+        <div className="progress" aria-hidden="true">{CHAPTERS.map((c) => <span key={c.key} className={status[c.key]} />)}</div>
+        <ol className="chapters">
+          {CHAPTERS.map((c, i) => (
+            <li key={c.key} className={`chapter ${status[c.key]}`}>
+              <span className="num">{i + 1}</span>
+              <div className="body">
+                <div className="head"><strong>{c.title}</strong><span className="state">{status[c.key] === 'idle' ? '' : status[c.key]}</span></div>
+                <p className="muted">{c.plain}</p>
+                {notes[c.key] && <p className="note">{notes[c.key]}</p>}
+                {c.key === 'report' && rows.length > 0 && <Readings rows={rows} radar={story.radarMm} />}
+              </div>
+            </li>
+          ))}
+        </ol>
+        {outcome && <p className="outcome">{outcome}</p>}
+      </Card>
 
-      {outcome && <p className="outcome">{outcome}</p>}
-
-      <section className="panel">
-        <h2>Requests sent</h2>
-        <p className="muted">Every call the browser makes, with the exact address it went to.</p>
-        <table aria-label="Request log"><thead><tr><th>Method</th><th>URL</th><th>Status</th><th>ms</th></tr></thead>
-          <tbody>{calls.map((c, i) => <tr key={i} className={c.ok ? '' : 'bad'}><td className="mono">{c.method}</td><td className="mono">{c.url}</td><td>{c.status || 'no reply'}</td><td>{c.ms}</td></tr>)}</tbody></table>
-        {!calls.length && <p className="muted">Nothing sent yet.</p>}
-      </section>
-    </div>
+      <Card title="Requests sent" note="Every call the browser makes, with the exact address it went to." flush>
+        {calls.length ? (
+          <TableWrap><table aria-label="Request log"><thead><tr><th>Method</th><th>Backend URL</th><th>Via</th><th>Status</th><th>ms</th></tr></thead>
+            <tbody>{calls.map((c, i) => <tr key={i} className={c.ok ? '' : 'bad'}><td className="mono">{c.method}</td><td className="mono">{c.url}</td><td className="mono muted">{c.via ? 'dev proxy' : 'direct'}</td><td>{c.status || 'no reply'}</td><td>{c.ms}</td></tr>)}</tbody></table></TableWrap>
+        ) : <Empty>Nothing sent yet. Run a story.</Empty>}
+      </Card>
+    </>
   );
 }
 
 function Readings({ rows, radar }: { rows: Row[]; radar: number }) {
-  return <table aria-label="Device readings"><thead><tr><th>Device</th><th>Claim</th><th>Fair claim at {radar} mm</th><th>Verdict</th><th>Reason</th></tr></thead><tbody>
+  return <TableWrap><table aria-label="Device readings"><thead><tr><th>Device</th><th>Claim</th><th>Fair claim at {radar} mm</th><th>Verdict</th><th>Reason</th></tr></thead><tbody>
     {rows.map((r) => <tr key={r.p.device.deviceId}>
       <td className="mono">{r.p.device.deviceId}</td>
       <td>{r.p.payload.claimed_litres.toLocaleString()} L{r.p.suspicious ? ' ⚑' : ''}</td>
       <td>{Math.round(expectedLitres(radar, r.p.device)).toLocaleString()} L</td>
-      <td>{r.verdict ? <span className={`badge ${cls[r.verdict.State]}`}>{label[r.verdict.State]}</span> : r.error ? <span className="badge quarantine">Rejected</span> : '…'}</td>
+      <td>{r.verdict ? <Badge state={r.verdict.State} /> : r.error ? <span className="badge quarantine">Rejected</span> : '…'}</td>
       <td className="mono">{r.verdict?.Reason ?? r.error ?? ''}</td></tr>)}
-  </tbody></table>;
+  </tbody></table></TableWrap>;
 }

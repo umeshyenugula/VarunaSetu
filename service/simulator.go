@@ -163,19 +163,13 @@ func (s *Server) provisionVirtualCity(ctx context.Context) (*provisionResponse, 
 	}
 	defer tx.Rollback()
 
-	// Scoped cleanup of previous sim data. Delete dependents before parents.
-	for _, q := range []string{
-		`DELETE FROM ledger_entry WHERE reading_id IN (SELECT id FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%')`,
-		`DELETE FROM escrow_record WHERE reading_id IN (SELECT id FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%')`,
-		`DELETE FROM verification_decision WHERE reading_id IN (SELECT id FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%')`,
-		`DELETE FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%'`,
-		`DELETE FROM device WHERE id LIKE 'sim-dev-%'`,
-		`DELETE FROM building WHERE external_id LIKE 'sim-bld-%'`,
-	} {
-		if _, err := tx.ExecContext(ctx, q); err != nil {
-			return nil, fmt.Errorf("cleanup: %w", err)
-		}
+	// Verification decisions and audit entries are immutable. Each provision
+	// therefore gets a fresh namespace instead of deleting prior simulator data.
+	runIDBytes := make([]byte, 8)
+	if _, err := rand.Read(runIDBytes); err != nil {
+		return nil, fmt.Errorf("generate simulator run id: %w", err)
 	}
+	runID := base64.RawURLEncoding.EncodeToString(runIDBytes)
 
 	type bspec struct {
 		ext, name, cell string
@@ -204,7 +198,8 @@ func (s *Server) provisionVirtualCity(ctx context.Context) (*provisionResponse, 
 	resp.SignerContract.TimestampNote = "Must be within service timestamp window (default 5m past, 30s future). Use wall-clock time for live API submissions."
 
 	for i, b := range buildings {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO building (external_id, capacity_litres, reserved_litres) VALUES ($1,$2,0) ON CONFLICT (external_id) DO UPDATE SET capacity_litres=EXCLUDED.capacity_litres, reserved_litres=0`, b.ext, b.cap); err != nil {
+		buildingExternal := fmt.Sprintf("%s-%s", b.ext, runID)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO building (external_id, capacity_litres, reserved_litres) VALUES ($1,$2,0)`, buildingExternal, b.cap); err != nil {
 			return nil, err
 		}
 		pub, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -212,16 +207,16 @@ func (s *Server) provisionVirtualCity(ctx context.Context) (*provisionResponse, 
 			return nil, err
 		}
 		seed := priv.Seed()
-		devID := fmt.Sprintf("sim-dev-%03d", i+1)
+		devID := fmt.Sprintf("sim-dev-%s-%03d", runID, i+1)
 		var buildingID string
-		if err := tx.QueryRowContext(ctx, `SELECT id FROM building WHERE external_id=$1`, b.ext).Scan(&buildingID); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM building WHERE external_id=$1`, buildingExternal).Scan(&buildingID); err != nil {
 			return nil, err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO device (id, building_id, public_key, revoked_at) VALUES ($1,$2,$3,NULL) ON CONFLICT (id) DO UPDATE SET building_id=EXCLUDED.building_id, public_key=EXCLUDED.public_key, revoked_at=NULL`, devID, buildingID, []byte(pub)); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO device (id, building_id, public_key, revoked_at) VALUES ($1,$2,$3,NULL)`, devID, buildingID, []byte(pub)); err != nil {
 			return nil, err
 		}
-		resp.Buildings = append(resp.Buildings, map[string]any{"buildingId": b.ext, "name": b.name, "h3Index": b.cell, "roofAreaM2": b.roof, "runoffCoeff": b.runoff, "capacityLitres": b.cap})
-		resp.Devices = append(resp.Devices, provisionDevice{DeviceID: devID, BuildingExternal: b.ext, H3Index: b.cell, PublicKeyBase64: base64.StdEncoding.EncodeToString(pub), PrivateSeedBase64: base64.StdEncoding.EncodeToString(seed), RoofAreaM2: b.roof, RunoffCoeff: b.runoff, CapacityLitres: b.cap})
+		resp.Buildings = append(resp.Buildings, map[string]any{"buildingId": buildingExternal, "name": b.name, "h3Index": b.cell, "roofAreaM2": b.roof, "runoffCoeff": b.runoff, "capacityLitres": b.cap})
+		resp.Devices = append(resp.Devices, provisionDevice{DeviceID: devID, BuildingExternal: buildingExternal, H3Index: b.cell, PublicKeyBase64: base64.StdEncoding.EncodeToString(pub), PrivateSeedBase64: base64.StdEncoding.EncodeToString(seed), RoofAreaM2: b.roof, RunoffCoeff: b.runoff, CapacityLitres: b.cap})
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -242,23 +237,9 @@ func (s *Server) simulatorReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	stmts := []string{
-		`DELETE FROM audit_ledger_entry WHERE event_ref LIKE 'telemetry_reading:%' AND event_ref LIKE '%sim-dev%'`,
-		`DELETE FROM verification_decision WHERE reading_id IN (SELECT id FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%')`,
-		`DELETE FROM escrow_record WHERE reading_id IN (SELECT id FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%')`,
-		`DELETE FROM ledger_entry WHERE reading_id IN (SELECT id FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%')`,
-		`DELETE FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%'`,
-		`UPDATE building SET reserved_litres=0, updated_at=now() WHERE external_id LIKE 'sim-bld-%'`,
-	}
-	// Simpler, safer: remove all telemetry for sim devices and related rows by FK-safe order where possible.
-	_ = stmts
-	// audit_ledger_entry is append-only by design; do not delete it.
 	for _, q := range []string{
-		`DELETE FROM ledger_entry le USING telemetry_reading tr WHERE le.reading_id=tr.id AND tr.device_id LIKE 'sim-dev-%'`,
-		`DELETE FROM escrow_record er USING telemetry_reading tr WHERE er.reading_id=tr.id AND tr.device_id LIKE 'sim-dev-%'`,
-		`DELETE FROM verification_decision vd USING telemetry_reading tr WHERE vd.reading_id=tr.id AND tr.device_id LIKE 'sim-dev-%'`,
-		`DELETE FROM telemetry_reading WHERE device_id LIKE 'sim-dev-%'`,
-		`UPDATE building SET reserved_litres=0 WHERE external_id LIKE 'sim-bld-%'`,
+		`DELETE FROM device d WHERE d.id LIKE 'sim-dev-%' AND NOT EXISTS (SELECT 1 FROM telemetry_reading tr WHERE tr.device_id=d.id)`,
+		`DELETE FROM building b WHERE b.external_id LIKE 'sim-bld-%' AND NOT EXISTS (SELECT 1 FROM device d WHERE d.building_id=b.id)`,
 	} {
 		if _, err := tx.ExecContext(ctx, q); err != nil {
 			s.cfg.Logger.Error("simulator reset step failed", "error", err, "query", q)
