@@ -68,7 +68,7 @@ Cities that incentivise rooftop rainwater harvesting need to know whether a hous
 Everything that survives is persisted transactionally in PostGIS and appended to a **SHA-256 hash-chained audit ledger** with Ed25519-signed checkpoints.
 
 <div align="center">
-<img src="docs/assets/pipeline.svg" alt="One reading, seven checkpoints: sign, authenticate, verify, decide, persist, chain, observe" width="100%">
+<img src="/pipeline.svg" alt="One reading, seven checkpoints: sign, authenticate, verify, decide, persist, chain, observe" width="100%">
 </div>
 
 ## Highlights
@@ -510,7 +510,7 @@ The people, the sky and the clock are simulated; **the system under demonstratio
 To make the value visible, each scenario also runs three simple validators on identical traffic: **Static** (`R_obs ≤ 10 mm`), **Radar-only** and **Peer-only** (robust z-score), next to **VarunaSetu** (the live service, including escrow resolution). The first three are reference baselines in `citysim/behavior.go`, not vendor products.
 
 <div align="center">
-<img src="docs/assets/benchmark.svg" alt="Balanced accuracy of static, radar-only, peer-only and VarunaSetu validators in two CitySim scenarios" width="100%">
+<img src="/benchmark.svg" alt="Balanced accuracy of static, radar-only, peer-only and VarunaSetu validators in two CitySim scenarios" width="100%">
 </div>
 
 ### All 12 scenarios — balanced accuracy
@@ -856,8 +856,8 @@ Mitigations that add new inputs (a server-side radar feed, rain gauges) would al
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-light.png">
-  <img src="docs/assets/logo.png" alt="VarunaSetu logo" width="320">
+  <source media="(prefers-color-scheme: dark)" srcset="/logo-light.png">
+  <img src="/logo.png" alt="VarunaSetu logo" width="320">
 </picture>
 
 A bridge between what devices claim and what the sky and the neighbourhood can confirm.
