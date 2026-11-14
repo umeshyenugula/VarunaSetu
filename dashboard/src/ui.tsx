@@ -56,3 +56,8 @@ export function Button({ variant = 'default', ...props }: React.ButtonHTMLAttrib
 export function LinkButton({ href, variant = 'default', children }: { href: string; variant?: 'default' | 'primary'; children: ReactNode }) {
   return <a className={`btn ${variant === 'primary' ? 'primary' : ''}`} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
 }
+
+/** Label/value pairs for a detail card. */
+export function Facts({ items }: { items: { k: string; v: ReactNode }[] }) {
+  return <dl className="facts">{items.map(({ k, v }) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>;
+}
