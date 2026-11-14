@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { apiBase } from './config';
+import { apiBase, simulatorUrl } from './config';
 import { useLiveData, type LiveData } from './hooks';
 import Escrows from './pages/Escrows';
 import Ledger from './pages/Ledger';
@@ -8,7 +8,7 @@ import Overview from './pages/Overview';
 import Readings from './pages/Readings';
 import { backend } from './simulator/api';
 import Simulator from './simulator/Simulator';
-import { Banner, Button, PageHeader } from './ui';
+import { Banner, Button, LinkButton, PageHeader } from './ui';
 
 type RouteId = 'story' | 'overview' | 'map' | 'readings' | 'escrows' | 'ledger';
 interface Route { id: RouteId; label: string; group: string; title: string; description: string }
@@ -55,6 +55,11 @@ export default function App() {
             </div>
           ))}
         </nav>
+        <div className="sidebar-action">
+          <div className="nav-title">City simulator</div>
+          <p>Virtual Hyderabad on port 8090: scenarios, attacks and scoreboard.</p>
+          <LinkButton href={simulatorUrl()} variant="primary">Open simulator ↗</LinkButton>
+        </div>
         <ApiStatus />
       </aside>
 
@@ -62,7 +67,9 @@ export default function App() {
         <PageHeader
           title={current.title}
           description={current.description}
-          actions={monitoring && <Button onClick={data.refresh} disabled={data.loading}>{data.loading ? 'Loading…' : 'Refresh'}</Button>}
+          actions={monitoring
+            ? <Button onClick={data.refresh} disabled={data.loading}>{data.loading ? 'Loading…' : 'Refresh'}</Button>
+            : <LinkButton href={simulatorUrl()} variant="primary">Open city simulator ↗</LinkButton>}
         />
         {route === 'story' ? <Simulator /> : <Monitoring data={data}>{screen(route, data)}</Monitoring>}
       </main>

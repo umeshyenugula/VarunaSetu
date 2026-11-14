@@ -18,3 +18,12 @@ export function backendUrl(path = ''): string {
   const target = (import.meta.env.VITE_PROXY_TARGET?.trim() || 'http://localhost:8080').replace(/\/+$/, '');
   return `${target}${path}`;
 }
+
+/**
+ * Address of the standalone city simulator (cmd/citysim, port 8090). The dashboard only links to it;
+ * it never sends API requests there. The simulator gets our origin so its "Dashboard" button returns here.
+ */
+export function simulatorUrl(): string {
+  const value = (import.meta.env.VITE_SIM_URL?.trim() || 'http://localhost:8090').replace(/\/+$/, '');
+  return `${value}/?dashboard=${encodeURIComponent(window.location.origin)}`;
+}

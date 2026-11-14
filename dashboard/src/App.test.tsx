@@ -46,6 +46,13 @@ describe('HydroLedger dashboard', () => {
     expect(screen.getByTestId('polygon')).toBeInTheDocument();
   });
 
+  it('links to the city simulator on port 8090 without calling it', async () => {
+    render(<App />);
+    const links = await screen.findAllByRole('link', { name: /open simulator/i });
+    expect(links[0].getAttribute('href')).toContain('http://localhost:8090/');
+    expect(links[0]).toHaveAttribute('target', '_blank');
+  });
+
   it('keeps the same navigation and page header on every screen', async () => {
     render(<App />);
     for (const label of ['Story', 'Overview', 'Map', 'Readings', 'Escrows', 'Ledger']) {

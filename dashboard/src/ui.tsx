@@ -51,3 +51,8 @@ export function TableWrap({ children }: { children: ReactNode }) {
 export function Button({ variant = 'default', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' }) {
   return <button {...props} className={`btn ${variant === 'primary' ? 'primary' : ''} ${props.className ?? ''}`} />;
 }
+
+/** Link that looks like a button; opens another app (e.g. the simulator) in a new tab. */
+export function LinkButton({ href, variant = 'default', children }: { href: string; variant?: 'default' | 'primary'; children: ReactNode }) {
+  return <a className={`btn ${variant === 'primary' ? 'primary' : ''}`} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+}

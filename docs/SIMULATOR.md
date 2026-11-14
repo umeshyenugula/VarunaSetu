@@ -29,3 +29,15 @@ By default the browser calls same-origin `/api/*`, and Vite forwards it to
 `VITE_PROXY_TARGET` (default `http://localhost:8080`). Set `VITE_API_BASE` only to
 call a backend directly. The backend needs `SIMULATOR_ENABLED=true` (set in
 `docker-compose.yml`) for the `/simulator/*` endpoints.
+
+## City simulator (port 8090)
+
+`go run ./cmd/citysim serve` (or `docker compose --profile demo up --build citysim`) serves the
+virtual-Hyderabad simulator at http://localhost:8090. It uses the same shell as the dashboard
+(sidebar, page header, bordered cards, white and square-cornered) with screens City, Live API,
+Scoreboard, Attacks and All scenarios, and the same responsive behaviour: on narrow screens the
+sidebar becomes a top bar and nothing scrolls sideways. The dashboard has an **Open simulator** button (sidebar and Story screen)
+that opens it in a new tab; the simulator's **Dashboard** button returns to the dashboard.
+Set `VITE_SIM_URL` to change where the dashboard button points, or open the simulator with
+`/?dashboard=http://host:5173` to change where its back button points. These are links only:
+the dashboard sends its API requests to 8080, never to 8090.
