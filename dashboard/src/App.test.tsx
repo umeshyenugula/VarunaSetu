@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAnalytics, listCells, listEscrows, listLedger, listReadings } from './api/client';
 import App from './App';
@@ -53,6 +54,12 @@ describe('HydroLedger dashboard', () => {
     expect(links[0]).toHaveAttribute('target', '_blank');
   });
 
+  it('links to the documentation as a page of its own, not a dashboard screen', async () => {
+    render(<App />);
+    expect(await screen.findByRole('link', { name: 'Open documentation →' })).toHaveAttribute('href', '/docs/');
+    expect(screen.queryByRole('link', { name: 'Constitution' })).not.toBeInTheDocument();
+  });
+
   it('keeps the same navigation and page header on every screen', async () => {
     render(<App />);
     for (const label of ['Story', 'Overview', 'Map', 'Readings', 'Escrows', 'Ledger']) {
@@ -66,5 +73,32 @@ describe('HydroLedger dashboard', () => {
     render(<App />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Live data unavailable');
     expect(screen.queryByText('SIMULATED DATA')).not.toBeInTheDocument();
+  });
+});
+
+describe('URL params on the existing screens', () => {
+  it('keeps readings filters in the URL', async () => {
+    window.location.hash = '#/readings?decision=QUARANTINE';
+    render(<App />);
+    expect(await screen.findByText('No readings match.')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('Filter decision'), 'ACCEPT');
+    expect(window.location.hash).toBe('#/readings?decision=ACCEPT');
+    expect(await screen.findByRole('link', { name: 'device-1' })).toBeInTheDocument();
+  });
+
+  it('opens a reading and a cell from :id and :cell', async () => {
+    window.location.hash = '#/readings/r1';
+    const { unmount } = render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Reading detail' })).toBeInTheDocument();
+    unmount();
+    window.location.hash = '#/map/8928308280fffff';
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Cell detail' })).toBeInTheDocument();
+  });
+
+  it('preselects the story scenario from ?scenario=', async () => {
+    window.location.hash = '#/story?scenario=inflated';
+    render(<App />);
+    expect(await screen.findByRole('radio', { name: 'Inflated claim' })).toHaveAttribute('aria-checked', 'true');
   });
 });
