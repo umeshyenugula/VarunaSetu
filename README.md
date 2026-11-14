@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner.svg" alt="VarunaSetu — Zero-Trust Spatial-Physics Oracle and Cryptographic Ledger for Urban Water Resilience" width="100%">
+<img src="banner.svg" alt="VarunaSetu — Zero-Trust Spatial-Physics Oracle and Cryptographic Ledger for Urban Water Resilience" width="100%">
 
 <br>
 
