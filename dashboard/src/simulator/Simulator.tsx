@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { backend, onApiCall, resolvedUrl, simulatorApi, submitSignedTelemetry, type ApiCall, type ProvisionDevice, type Verdict } from './api';
-import { setQuery, useRoute } from '../router';
 import { Badge, Button, Card, Empty, TableWrap } from '../ui';
 import { expectedLitres, plan, STORIES, type Planned, type Story, type StoryId } from './story';
 
@@ -21,8 +20,7 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const idle = (): Record<Key, Status> => ({ connect: 'idle', city: 'idle', rain: 'idle', report: 'idle', verdict: 'idle', record: 'idle' });
 
 export default function Simulator() {
-  const scenario = useRoute().query.get('scenario');
-  const storyId = (STORIES.some((x) => x.id === scenario) ? scenario : 'honest') as StoryId; // ?scenario= in the URL
+  const [storyId, setStoryId] = useState<StoryId>('honest');
   const [status, setStatus] = useState<Record<Key, Status>>(idle);
   const [notes, setNotes] = useState<Partial<Record<Key, string>>>({});
   const [rows, setRows] = useState<Row[]>([]);
@@ -100,7 +98,7 @@ export default function Simulator() {
       <Card title="Scenario" note="Pick what happens, then run it. Nothing is faked: the backend returns every verdict.">
         <div className="segments" role="radiogroup" aria-label="Story">
           {STORIES.map((s) => (
-            <button key={s.id} role="radio" aria-checked={s.id === storyId} className={s.id === storyId ? 'on' : ''} disabled={running} onClick={() => setQuery({ scenario: s.id === 'honest' ? null : s.id })}>{s.title}</button>
+            <button key={s.id} role="radio" aria-checked={s.id === storyId} className={s.id === storyId ? 'on' : ''} disabled={running} onClick={() => setStoryId(s.id)}>{s.title}</button>
           ))}
         </div>
         <p className="lede">{story.plain}</p>

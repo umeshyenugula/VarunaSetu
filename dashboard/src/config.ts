@@ -27,7 +27,3 @@ export function simulatorUrl(): string {
   const value = (import.meta.env.VITE_SIM_URL?.trim() || 'http://localhost:8090').replace(/\/+$/, '');
   return `${value}/?dashboard=${encodeURIComponent(window.location.origin)}`;
 }
-
-/** The dashboard and the documentation are two pages of one build: "/" and "/docs/" (always with the trailing slash). */
-export const dashboardUrl = (): string => import.meta.env.BASE_URL;
-export const docsUrl = (): string => `${import.meta.env.BASE_URL}docs/`;

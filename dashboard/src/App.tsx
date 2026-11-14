@@ -1,13 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import Wordmark from './brand/Wordmark';
-import { apiBase, docsUrl, simulatorUrl } from './config';
+import { apiBase, simulatorUrl } from './config';
 import { useLiveData, type LiveData } from './hooks';
 import Escrows from './pages/Escrows';
 import Ledger from './pages/Ledger';
 import MapView from './pages/MapView';
 import Overview from './pages/Overview';
 import Readings from './pages/Readings';
-import { buildHash, useRoute } from './router';
 import { backend } from './simulator/api';
 import Simulator from './simulator/Simulator';
 import { Banner, Button, LinkButton, PageHeader } from './ui';
@@ -24,34 +22,36 @@ const ROUTES: Route[] = [
   { id: 'ledger', label: 'Ledger', group: 'Monitoring', title: 'Audit ledger', description: 'Tamper-evident record of every decision.' },
 ];
 
+function routeFromHash(): RouteId {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  if (hash === 'operations') return 'overview'; // old bookmark
+  return ROUTES.some((r) => r.id === hash) ? (hash as RouteId) : 'story';
+}
+
 export default function App() {
-  const { segments } = useRoute();
-  const head = segments[0] === 'operations' ? 'overview' : segments[0]; // old bookmark
-  const route = (ROUTES.find((r) => r.id === head)?.id ?? 'story') as RouteId;
+  const [route, setRoute] = useState<RouteId>(routeFromHash);
+  useEffect(() => {
+    const onHash = () => setRoute(routeFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   const current = ROUTES.find((r) => r.id === route) as Route;
   const groups = [...new Set(ROUTES.map((r) => r.group))];
   const monitoring = current.group === 'Monitoring';
   const data = useLiveData(monitoring ? route : null);
 
-  useEffect(() => { document.title = `${current.title} · VarunaSetu`; }, [current.title]);
-  // The docs used to be a dashboard screen (#/docs/...). They are a page of their own now, so old links move over.
-  useEffect(() => { if (head === 'docs') window.location.replace(`${docsUrl()}#/${segments.slice(1).join('/')}`); }, [head, segments]);
-
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">
-          <a href={buildHash(['story'])} aria-label="VarunaSetu, home"><Wordmark className="wordmark" /></a>
-          <span>Urban water verification</span>
-        </div>
+        <div className="brand"><strong>VarunaSetu</strong><span>Urban water verification</span></div>
         <nav aria-label="Screens">
           {groups.map((group) => (
             <div className="nav-group" key={group}>
               <div className="nav-title">{group}</div>
-              {ROUTES.filter((r) => r.group === group).map((r) => {
-                const on = r.id === route;
-                return <a key={r.id} href={buildHash([r.id])} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined}>{r.label}</a>;
-              })}
+              {ROUTES.filter((r) => r.group === group).map((r) => (
+                <a key={r.id} href={`#/${r.id}`} className={r.id === route ? 'on' : ''} aria-current={r.id === route ? 'page' : undefined}>{r.label}</a>
+              ))}
             </div>
           ))}
         </nav>
@@ -59,11 +59,6 @@ export default function App() {
           <div className="nav-title">City simulator</div>
           <p>Virtual Hyderabad on port 8090: scenarios, attacks and scoreboard.</p>
           <LinkButton href={simulatorUrl()} variant="primary">Open simulator ↗</LinkButton>
-        </div>
-        <div className="sidebar-action">
-          <div className="nav-title">Documentation</div>
-          <p>Preamble, how it works, constitution and the full reference, on a page of their own.</p>
-          <a className="btn" href={docsUrl()}>Open documentation →</a>
         </div>
         <ApiStatus />
       </aside>
